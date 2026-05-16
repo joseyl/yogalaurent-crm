@@ -23,6 +23,15 @@ interface Client {
 
 type SortField = 'last_name' | 'total_spend' | 'last_purchase_date'
 
+function SortArrow({ field, sortField, sortDirection }: { field: SortField; sortField: SortField; sortDirection: 'asc' | 'desc' }) {
+  if (sortField !== field) return null
+  return (
+    <span style={{ marginLeft: '4px', color: '#B8540A' }}>
+      {sortDirection === 'asc' ? '↑' : '↓'}
+    </span>
+  )
+}
+
 function formatDate(dateStr: string | null): string {
   if (!dateStr) return '—'
   const [y, m, d] = dateStr.split('-').map(Number)
@@ -166,15 +175,6 @@ export default function ClientsPage() {
   const safePage = Math.min(currentPage, totalPages)
   const paginated = sorted.slice((safePage - 1) * pageSize, safePage * pageSize)
 
-  function SortArrow({ field }: { field: SortField }) {
-    if (sortField !== field) return null
-    return (
-      <span style={{ marginLeft: '4px', color: '#B8540A' }}>
-        {sortDirection === 'asc' ? '↑' : '↓'}
-      </span>
-    )
-  }
-
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[40vh]">
@@ -307,7 +307,7 @@ export default function ClientsPage() {
                 style={{ fontSize: '11px', color: '#6b7280' }}
                 onClick={() => handleSort('last_name')}
               >
-                Name<SortArrow field="last_name" />
+                Name<SortArrow field="last_name" sortField={sortField} sortDirection={sortDirection} />
               </th>
               {/* Non-sortable */}
               {['Email', 'Status', 'Source', 'Assigned To'].map(h => (
@@ -325,7 +325,7 @@ export default function ClientsPage() {
                 style={{ fontSize: '11px', color: '#6b7280' }}
                 onClick={() => handleSort('total_spend')}
               >
-                Total Spend<SortArrow field="total_spend" />
+                Total Spend<SortArrow field="total_spend" sortField={sortField} sortDirection={sortDirection} />
               </th>
               {/* Sortable: Last Purchase */}
               <th
@@ -333,7 +333,7 @@ export default function ClientsPage() {
                 style={{ fontSize: '11px', color: '#6b7280' }}
                 onClick={() => handleSort('last_purchase_date')}
               >
-                Last Purchase<SortArrow field="last_purchase_date" />
+                Last Purchase<SortArrow field="last_purchase_date" sortField={sortField} sortDirection={sortDirection} />
               </th>
             </tr>
           </thead>

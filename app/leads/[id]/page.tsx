@@ -10,20 +10,13 @@ export default async function LeadDetailPage({ params }: Props) {
   const { id } = await params
   const supabase = createServerClient()
 
-  const [{ data: leadRaw }, { data: products }] = await Promise.all([
-    supabase
-      .from('leads')
-      .select(
-        'id, status, assigned_to, date_added, last_followup_date, notes, person_id, product_id, people!inner(first_name, last_name, email, phone, country, source_channel), products(name)'
-      )
-      .eq('id', id)
-      .maybeSingle(),
-    supabase
-      .from('products')
-      .select('id, name, category')
-      .order('category', { ascending: true })
-      .order('name', { ascending: true }),
-  ])
+  const { data: leadRaw } = await supabase
+    .from('leads')
+    .select(
+      'id, status, assigned_to, date_added, last_followup_date, notes, person_id, product_id, people!inner(first_name, last_name, email, phone, country, source_channel), products(name)'
+    )
+    .eq('id', id)
+    .maybeSingle()
 
   if (!leadRaw) notFound()
 
@@ -55,16 +48,5 @@ export default async function LeadDetailPage({ params }: Props) {
     product_name: product?.name ?? null,
   }
 
-  return (
-    <LeadDetail
-      lead={lead}
-      products={
-        (products ?? []).map(p => ({
-          id: p.id,
-          name: p.name,
-          category: p.category,
-        }))
-      }
-    />
-  )
+  return <LeadDetail lead={lead} />
 }

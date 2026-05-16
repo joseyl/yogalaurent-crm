@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import StatusBadge from '@/components/StatusBadge'
 
@@ -296,7 +296,7 @@ function ByCategorySection({
     { key: 'workshop', label: 'Workshops' },
   ]
 
-  function exportCategory(key: keyof ReportsData['byCategory'], label: string) {
+  function exportCategory(key: keyof ReportsData['byCategory']) {
     const headers = ['Rank', 'First Name', 'Last Name', 'Email', 'Purchases', 'Total Spend']
     const rows = data[key].map((s, i) => [
       String(i + 1),
@@ -316,7 +316,7 @@ function ByCategorySection({
       </div>
       {sections.map(({ key, label }) => (
         <div key={key}>
-          <SubHeading title={label} onExport={() => exportCategory(key, label)} />
+          <SubHeading title={label} onExport={() => exportCategory(key)} />
           <CategoryTable data={data[key]} />
         </div>
       ))}
@@ -445,46 +445,43 @@ export default function ReportsPage() {
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
 
-  const fetchData = useCallback((from: string, to: string) => {
-    setLoading(true)
-    setError(null)
-    const params = new URLSearchParams()
-    if (from) params.set('date_from', from)
-    if (to) params.set('date_to', to)
-    const url = `/api/reports${params.toString() ? '?' + params.toString() : ''}`
+  useEffect(() => {
+    let cancelled = false
+    const sp = new URLSearchParams()
+    if (dateFrom) sp.set('date_from', dateFrom)
+    if (dateTo) sp.set('date_to', dateTo)
+    const url = `/api/reports${sp.toString() ? '?' + sp.toString() : ''}`
     fetch(url)
       .then(r => {
         if (!r.ok) throw new Error('Failed to load reports. Please refresh.')
         return r.json()
       })
       .then((d: ReportsData) => {
-        setData(d)
-        setLoading(false)
+        if (!cancelled) { setData(d); setLoading(false) }
       })
       .catch((err: Error) => {
-        setError(err.message)
-        setLoading(false)
+        if (!cancelled) { setError(err.message); setLoading(false) }
       })
-  }, [])
-
-  useEffect(() => {
-    fetchData('', '')
-  }, [fetchData])
+    return () => { cancelled = true }
+  }, [dateFrom, dateTo])
 
   function handleDateFrom(value: string) {
+    setLoading(true)
+    setError(null)
     setDateFrom(value)
-    fetchData(value, dateTo)
   }
 
   function handleDateTo(value: string) {
+    setLoading(true)
+    setError(null)
     setDateTo(value)
-    fetchData(dateFrom, value)
   }
 
   function handleClear() {
+    setLoading(true)
+    setError(null)
     setDateFrom('')
     setDateTo('')
-    fetchData('', '')
   }
 
   const inputStyle: React.CSSProperties = {

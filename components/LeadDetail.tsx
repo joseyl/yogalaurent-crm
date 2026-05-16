@@ -23,15 +23,8 @@ interface LeadData {
   product_name: string | null
 }
 
-interface Product {
-  id: string
-  name: string
-  category: string
-}
-
 interface Props {
   lead: LeadData
-  products: Product[]
 }
 
 type SaveState = 'idle' | 'saving' | 'saved' | 'error'
@@ -69,7 +62,7 @@ function SaveMsg({ state }: { state: SaveState }) {
   return null
 }
 
-export default function LeadDetail({ lead: initialLead, products }: Props) {
+export default function LeadDetail({ lead: initialLead }: Props) {
   const router = useRouter()
   const [lead, setLead] = useState(initialLead)
   const [notes, setNotes] = useState(initialLead.notes ?? '')
