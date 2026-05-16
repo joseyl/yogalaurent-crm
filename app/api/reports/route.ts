@@ -44,6 +44,7 @@ export async function GET(request: NextRequest) {
   let query = supabase
     .from('purchases')
     .select('id, person_id, amount_gbp, purchase_date, people!inner(id, first_name, last_name, email, status), products(id, name, category)')
+    .limit(10000)
 
   if (dateFrom) query = query.gte('purchase_date', dateFrom)
   if (dateTo) query = query.lte('purchase_date', dateTo)
