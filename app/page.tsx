@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { createServerClient } from '@/lib/supabase/server'
 import DashboardCharts from '@/components/charts/DashboardCharts'
+import { formatGBP } from '@/lib/utils'
 
 const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
@@ -154,7 +155,7 @@ export default async function DashboardPage() {
       <div className="grid grid-cols-2 gap-4 px-4">
         <SummaryCard label="Active Clients" value={summary.activeClients.toString()} />
         <SummaryCard label="Open Leads" value={summary.openLeads.toString()} />
-        <SummaryCard label="Revenue This Month" value={`£${summary.revenueThisMonth.toFixed(2)}`} />
+        <SummaryCard label="Revenue This Month" value={formatGBP(summary.revenueThisMonth)} />
         <RevenueYearCard total={summary.revenueThisYear} lr={summary.revenueThisYearLR} ttl={summary.revenueThisYearTTL} />
       </div>
 
@@ -238,15 +239,15 @@ function RevenueYearCard({ total, lr, ttl }: { total: number; lr: number; ttl: n
   return (
     <div className="bg-white border border-[#e5e7eb] rounded-sm p-5">
       <p className="uppercase tracking-wide text-xs" style={{ color: '#6b7280' }}>Revenue This Year</p>
-      <p className="font-bold mt-1" style={{ fontSize: '28px', color: '#1A2C4E' }}>£{total.toFixed(2)}</p>
+      <p className="font-bold mt-1" style={{ fontSize: '28px', color: '#1A2C4E' }}>{formatGBP(total)}</p>
       <div className="mt-2 space-y-0.5">
         <div className="flex justify-between">
           <span className="text-xs" style={{ color: '#6b7280' }}>Laurent Roure</span>
-          <span className="text-xs font-medium" style={{ color: '#6b7280' }}>£{lr.toFixed(2)}</span>
+          <span className="text-xs font-medium" style={{ color: '#6b7280' }}>{formatGBP(lr)}</span>
         </div>
         <div className="flex justify-between">
           <span className="text-xs" style={{ color: '#6b7280' }}>Terra Training Ltd</span>
-          <span className="text-xs font-medium" style={{ color: '#6b7280' }}>£{ttl.toFixed(2)}</span>
+          <span className="text-xs font-medium" style={{ color: '#6b7280' }}>{formatGBP(ttl)}</span>
         </div>
       </div>
     </div>

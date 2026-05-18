@@ -11,6 +11,7 @@ import {
   Legend,
   Tooltip,
 } from 'recharts'
+import { formatGBP } from '@/lib/utils'
 
 interface CategoryRevenue {
   category: string
@@ -38,8 +39,8 @@ export default function DashboardCharts({ categoryRevenue, trend }: Props) {
         <ResponsiveContainer width="100%" height={280}>
           <BarChart data={categoryRevenue} margin={{ top: 4, right: 8, left: 8, bottom: 4 }}>
             <XAxis dataKey="category" tick={{ fontSize: 11 }} />
-            <YAxis tickFormatter={(v: number) => `£${v}`} tick={{ fontSize: 11 }} />
-            <Tooltip formatter={(v) => [`£${Number(v).toFixed(2)}`, 'Revenue']} />
+            <YAxis tickFormatter={(v: number) => formatGBP(v)} tick={{ fontSize: 11 }} />
+            <Tooltip formatter={(v) => [formatGBP(Number(v)), 'Revenue']} />
             <Bar dataKey="total" fill="#1A2C4E" />
           </BarChart>
         </ResponsiveContainer>

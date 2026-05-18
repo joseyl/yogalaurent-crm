@@ -3,6 +3,7 @@
 import { useState, Fragment } from 'react'
 import { Edit2, Trash2, RefreshCcw, Plus } from 'lucide-react'
 import StatusBadge from '@/components/StatusBadge'
+import { formatGBP } from '@/lib/utils'
 
 interface Product {
   id: string
@@ -365,7 +366,7 @@ export default function ClientTabs({ personId, purchases, attendance, leads, pro
       return
     }
     if (refundAmt > original.amount_gbp) {
-      setRefundError(`Cannot exceed the original amount of £${original.amount_gbp.toFixed(2)}.`)
+      setRefundError(`Cannot exceed the original amount of ${formatGBP(original.amount_gbp)}.`)
       return
     }
     setRefundSaving(true)
@@ -433,7 +434,7 @@ export default function ClientTabs({ personId, purchases, attendance, leads, pro
           <div>
             <div className="flex items-center justify-between mb-4">
               <p className="font-bold" style={{ color: '#1A2C4E' }}>
-                Total spend: £{totalSpend.toFixed(2)}
+                Total spend: {formatGBP(totalSpend)}
               </p>
               <button
                 onClick={openAddForm}
@@ -600,7 +601,7 @@ export default function ClientTabs({ personId, purchases, attendance, leads, pro
                                 <StatusBadge status={p.category} type="person" />
                               </td>
                               <td className="py-3 pr-4 text-sm text-right whitespace-nowrap" style={{ color: p.amount_gbp < 0 ? '#ef4444' : undefined }}>
-                                £{Number(p.amount_gbp).toFixed(2)}
+                                {formatGBP(Number(p.amount_gbp))}
                               </td>
                               <td className="py-3 pr-4 text-sm text-gray-500">{p.notes ?? '—'}</td>
                               <td className="py-3">
@@ -633,7 +634,7 @@ export default function ClientTabs({ personId, purchases, attendance, leads, pro
                             <tr className="border-b border-[#f3f4f6]">
                               <td colSpan={6} className="py-3 pl-0">
                                 <div className="border border-[#fde68a] p-3" style={{ background: '#fffbeb' }}>
-                                  <p className="text-xs font-semibold mb-2" style={{ color: '#92400e' }}>Issue refund for {p.product_name} (max £{p.amount_gbp.toFixed(2)})</p>
+                                  <p className="text-xs font-semibold mb-2" style={{ color: '#92400e' }}>Issue refund for {p.product_name} (max {formatGBP(p.amount_gbp)})</p>
                                   <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mb-2">
                                     <div>
                                       <label className="block text-xs text-gray-500 mb-1">Refund Amount *</label>
@@ -722,7 +723,7 @@ export default function ClientTabs({ personId, purchases, attendance, leads, pro
                         <div className="border border-[#e5e7eb] p-3" style={{ borderRadius: 0 }}>
                           <div className="flex justify-between items-start">
                             <p className="font-medium text-sm" style={{ color: '#1A2C4E' }}>{p.product_name}</p>
-                            <p className="font-semibold text-sm" style={{ color: p.amount_gbp < 0 ? '#ef4444' : '#B8540A' }}>£{Number(p.amount_gbp).toFixed(2)}</p>
+                            <p className="font-semibold text-sm" style={{ color: p.amount_gbp < 0 ? '#ef4444' : '#B8540A' }}>{formatGBP(Number(p.amount_gbp))}</p>
                           </div>
                           <div className="flex items-center gap-2 mt-1">
                             <p className="text-gray-400 text-xs">{formatDate(p.purchase_date)}</p>
@@ -748,7 +749,7 @@ export default function ClientTabs({ personId, purchases, attendance, leads, pro
                       )}
                       {refundingId === p.id && (
                         <div className="border border-[#fde68a] p-3 mt-1" style={{ background: '#fffbeb', borderRadius: 0 }}>
-                          <p className="text-xs font-semibold mb-2" style={{ color: '#92400e' }}>Issue refund (max £{p.amount_gbp.toFixed(2)})</p>
+                          <p className="text-xs font-semibold mb-2" style={{ color: '#92400e' }}>Issue refund (max {formatGBP(p.amount_gbp)})</p>
                           <div className="space-y-2 mb-2">
                             <div>
                               <label className="block text-xs text-gray-500 mb-1">Refund Amount *</label>

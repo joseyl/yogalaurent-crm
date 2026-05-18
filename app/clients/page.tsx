@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import StatusBadge from '@/components/StatusBadge'
+import { formatGBP } from '@/lib/utils'
 
 interface Client {
   id: string
@@ -39,7 +40,7 @@ function formatDate(dateStr: string | null): string {
 }
 
 function formatCurrency(amount: number): string {
-  return `£${amount.toFixed(2)}`
+  return formatGBP(amount)
 }
 
 function escapeCsvCell(value: string): string {
@@ -65,7 +66,7 @@ function exportCSV(data: Client[]) {
     c.status,
     c.assigned_to,
     c.source_channel ?? '',
-    c.total_spend.toFixed(2),
+    formatGBP(c.total_spend),
     c.last_purchase_date ?? '',
   ])
   const csv = [headers, ...rows]

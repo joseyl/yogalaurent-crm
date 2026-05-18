@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import StatusBadge from '@/components/StatusBadge'
+import { formatGBP } from '@/lib/utils'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -54,7 +55,7 @@ interface ReportsData {
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function fmt(n: number): string {
-  return `£${n.toFixed(2)}`
+  return formatGBP(n)
 }
 
 function escapeCsv(v: string): string {
@@ -150,17 +151,17 @@ function RevenueSummaryBlock({ data }: { data: { total: number; lr: number; ttl:
       <p className="uppercase tracking-wide text-xs mb-3" style={{ color: '#6b7280' }}>Revenue for Selected Period</p>
       <div className="flex flex-col gap-2">
         <div className="flex justify-between items-baseline">
-          <span className="font-bold" style={{ fontSize: '22px', color: '#1A2C4E' }}>£{data.total.toFixed(2)}</span>
+          <span className="font-bold" style={{ fontSize: '22px', color: '#1A2C4E' }}>{formatGBP(data.total)}</span>
           <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: '#6b7280' }}>Total</span>
         </div>
         <div className="border-t border-[#e5e7eb] pt-2 flex flex-col gap-1.5">
           <div className="flex justify-between items-center">
             <span className="text-sm" style={{ color: '#374151' }}>Laurent Roure</span>
-            <span className="text-sm font-medium" style={{ color: '#374151' }}>£{data.lr.toFixed(2)}</span>
+            <span className="text-sm font-medium" style={{ color: '#374151' }}>{formatGBP(data.lr)}</span>
           </div>
           <div className="flex justify-between items-center">
             <span className="text-sm" style={{ color: '#374151' }}>Terra Training Ltd</span>
-            <span className="text-sm font-medium" style={{ color: '#374151' }}>£{data.ttl.toFixed(2)}</span>
+            <span className="text-sm font-medium" style={{ color: '#374151' }}>{formatGBP(data.ttl)}</span>
           </div>
         </div>
       </div>
@@ -180,7 +181,7 @@ function TopSpendersSection({ data }: { data: Spender[] }) {
       s.email,
       s.status,
       String(s.purchase_count),
-      s.total_spend.toFixed(2),
+      formatGBP(s.total_spend),
     ])
     downloadCsv([headers, ...rows], `top-spenders-${today()}.csv`)
   }
@@ -331,7 +332,7 @@ function ByCategorySection({
       s.last_name ?? '',
       s.email,
       String(s.purchase_count),
-      s.total_spend.toFixed(2),
+      formatGBP(s.total_spend),
     ])
     downloadCsv([headers, ...rows], `top-spenders-${key}-${today()}.csv`)
   }
@@ -356,7 +357,7 @@ function ByCategorySection({
 function RetreatsSection({ data }: { data: RetreatRow[] }) {
   function exportCsv() {
     const headers = ['Retreat Name', 'Clients', 'Total Revenue']
-    const rows = data.map(r => [r.name, String(r.client_count), r.total_revenue.toFixed(2)])
+    const rows = data.map(r => [r.name, String(r.client_count), formatGBP(r.total_revenue)])
     downloadCsv([headers, ...rows], `revenue-retreats-${today()}.csv`)
   }
 
@@ -407,7 +408,7 @@ function RetreatsSection({ data }: { data: RetreatRow[] }) {
 function TrainingSection({ data }: { data: TrainingRow[] }) {
   function exportCsv() {
     const headers = ['Programme', 'Year', 'Clients', 'Total Revenue']
-    const rows = data.map(r => [r.name, String(r.cohort_year), String(r.client_count), r.total_revenue.toFixed(2)])
+    const rows = data.map(r => [r.name, String(r.cohort_year), String(r.client_count), formatGBP(r.total_revenue)])
     downloadCsv([headers, ...rows], `revenue-training-${today()}.csv`)
   }
 
