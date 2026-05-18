@@ -1,20 +1,9 @@
 import { notFound } from 'next/navigation'
-import Link from 'next/link'
 import { createServerClient } from '@/lib/supabase/server'
-import StatusBadge from '@/components/StatusBadge'
-import ClientTabs from '@/components/ClientTabs'
+import ClientDetail from '@/components/ClientDetail'
 
 interface Props {
   params: Promise<{ id: string }>
-}
-
-function Field({ label, value }: { label: string; value: string | null | undefined }) {
-  return (
-    <div>
-      <p className="uppercase tracking-wide text-xs mb-1" style={{ color: '#6b7280' }}>{label}</p>
-      <p className="font-medium text-sm" style={{ color: '#1A2C4E' }}>{value || '—'}</p>
-    </div>
-  )
 }
 
 export default async function ClientDetailPage({ params }: Props) {
@@ -26,11 +15,12 @@ export default async function ClientDetailPage({ params }: Props) {
     { data: purchases },
     { data: attendance },
     { data: leads },
+    { data: products },
   ] = await Promise.all([
     supabase.from('people').select('*').eq('id', id).maybeSingle(),
     supabase
       .from('purchases')
-      .select('id, amount_gbp, purchase_date, notes, products(name, category)')
+      .select('id, product_id, amount_gbp, purchase_date, notes, products(name, category)')
       .eq('person_id', id)
       .order('purchase_date', { ascending: false }),
     supabase
@@ -43,6 +33,12 @@ export default async function ClientDetailPage({ params }: Props) {
       .select('id, status, date_added, last_followup_date, notes, assigned_to, products(name)')
       .eq('person_id', id)
       .order('created_at', { ascending: false }),
+    supabase
+      .from('products')
+      .select('id, name, category')
+      .neq('archived', true)
+      .order('category', { ascending: true })
+      .order('name', { ascending: true }),
   ])
 
   if (!person) notFound()
@@ -51,6 +47,7 @@ export default async function ClientDetailPage({ params }: Props) {
     const prod = p.products as unknown as { name: string; category: string } | null
     return {
       id: p.id,
+      product_id: (p.product_id as string) ?? '',
       amount_gbp: Number(p.amount_gbp),
       purchase_date: p.purchase_date as string,
       notes: p.notes as string | null,
@@ -79,57 +76,33 @@ export default async function ClientDetailPage({ params }: Props) {
     }
   })
 
+  const personData = {
+    id: person.id as string,
+    first_name: person.first_name as string | null,
+    last_name: person.last_name as string | null,
+    email: person.email as string,
+    alt_email: person.alt_email as string | null,
+    phone: person.phone as string | null,
+    country: person.country as string | null,
+    status: person.status as string,
+    assigned_to: person.assigned_to as string | null,
+    source_channel: person.source_channel as string | null,
+    notes: person.notes as string | null,
+  }
+
+  const productsData = (products ?? []).map(p => ({
+    id: p.id as string,
+    name: p.name as string,
+    category: p.category as string,
+  }))
+
   return (
-    <div className="pb-24 max-w-4xl">
-      {/* Back link */}
-      <div className="px-6 pt-5 pb-2">
-        <Link
-          href="/clients"
-          className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700 w-fit"
-        >
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-            <path d="M10 12L6 8l4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-          Back to Clients
-        </Link>
-      </div>
-
-      {/* Header */}
-      <div className="px-6 pb-4">
-        <div className="flex flex-col md:flex-row md:items-center md:gap-3 gap-2">
-          <h1 className="font-bold" style={{ fontSize: '22px', color: '#1A2C4E' }}>
-            {person.first_name} {person.last_name}
-          </h1>
-          <StatusBadge status={person.status} />
-        </div>
-
-        {/* Detail fields grid */}
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-4 mt-4">
-          <Field label="Email" value={person.email} />
-          <Field label="Alt Email" value={person.alt_email} />
-          <Field label="Phone" value={person.phone} />
-          <Field label="Country" value={person.country} />
-          <Field label="Assigned To" value={person.assigned_to} />
-          <Field label="Source Channel" value={person.source_channel} />
-        </div>
-
-        {/* Notes */}
-        <div className="mt-4">
-          <p className="uppercase tracking-wide text-xs mb-1" style={{ color: '#6b7280' }}>Notes</p>
-          <p className="text-sm" style={{ color: '#374151' }}>{person.notes || '—'}</p>
-        </div>
-      </div>
-
-      <div className="border-t border-[#e5e7eb] mx-6" />
-
-      {/* Tabs */}
-      <div className="mt-2">
-        <ClientTabs
-          purchases={purchasesData}
-          attendance={attendanceData}
-          leads={leadsData}
-        />
-      </div>
-    </div>
+    <ClientDetail
+      person={personData}
+      purchases={purchasesData}
+      attendance={attendanceData}
+      leads={leadsData}
+      products={productsData}
+    />
   )
 }

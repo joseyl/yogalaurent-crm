@@ -2,58 +2,27 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import { LayoutDashboard, Users, Target, BarChart3, Package, MoreHorizontal } from 'lucide-react'
 
-const navItems = [
-  {
-    label: 'Dashboard',
-    href: '/',
-    icon: (
-      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <rect x="3" y="3" width="8" height="8" rx="1" fill="currentColor" />
-        <rect x="13" y="3" width="8" height="8" rx="1" fill="currentColor" />
-        <rect x="3" y="13" width="8" height="8" rx="1" fill="currentColor" />
-        <rect x="13" y="13" width="8" height="8" rx="1" fill="currentColor" />
-      </svg>
-    ),
-  },
-  {
-    label: 'Clients',
-    href: '/clients',
-    icon: (
-      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <circle cx="12" cy="7" r="4" fill="currentColor" />
-        <path d="M4 20c0-4 3.582-7 8-7s8 3 8 7" fill="currentColor" />
-      </svg>
-    ),
-  },
-  {
-    label: 'Leads',
-    href: '/leads',
-    icon: (
-      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <path d="M4 4h16l-4 7h-8l-4-7z" fill="currentColor" />
-        <path d="M8 11h8l2 4H6l2-4z" fill="currentColor" />
-        <path d="M10 15h4l1 3H9l1-3z" fill="currentColor" />
-      </svg>
-    ),
-  },
-  {
-    label: 'Reports',
-    href: '/reports',
-    icon: (
-      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <rect x="3" y="12" width="4" height="9" fill="currentColor" />
-        <rect x="10" y="7" width="4" height="14" fill="currentColor" />
-        <rect x="17" y="3" width="4" height="18" fill="currentColor" />
-      </svg>
-    ),
-  },
+const desktopNavItems = [
+  { label: 'Dashboard', href: '/', icon: <LayoutDashboard size={22} /> },
+  { label: 'Clients',   href: '/clients',   icon: <Users size={22} /> },
+  { label: 'Leads',     href: '/leads',     icon: <Target size={22} /> },
+  { label: 'Reports',   href: '/reports',   icon: <BarChart3 size={22} /> },
+  { label: 'Products',  href: '/products',  icon: <Package size={22} /> },
+]
+
+const mobileNavItems = [
+  { label: 'Dashboard', href: '/',       icon: <LayoutDashboard size={22} /> },
+  { label: 'Clients',   href: '/clients', icon: <Users size={22} /> },
+  { label: 'Leads',     href: '/leads',   icon: <Target size={22} /> },
+  { label: 'More',      href: '/more',    icon: <MoreHorizontal size={22} /> },
 ]
 
 export default function Nav() {
   const pathname = usePathname()
 
-  const isActive = (href: string) => {
+  function isActive(href: string): boolean {
     if (href === '/') return pathname === '/'
     return pathname.startsWith(href)
   }
@@ -71,7 +40,7 @@ export default function Nav() {
           </span>
         </div>
         <div className="flex flex-col">
-          {navItems.map((item) => {
+          {desktopNavItems.map(item => {
             const active = isActive(item.href)
             return (
               <Link
@@ -99,7 +68,7 @@ export default function Nav() {
         }}
       >
         <div className="flex justify-around items-center w-full h-full">
-          {navItems.map((item) => {
+          {mobileNavItems.map(item => {
             const active = isActive(item.href)
             return (
               <Link
