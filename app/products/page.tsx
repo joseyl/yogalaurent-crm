@@ -7,8 +7,17 @@ interface Product {
   id: string
   name: string
   category: string
+  entity: string
   created_at: string
   archived: boolean
+}
+
+const ENTITIES = ['Laurent Roure', 'Terra Training Ltd'] as const
+
+function entityAbbr(entity: string): string {
+  if (entity === 'Laurent Roure') return 'LR'
+  if (entity === 'Terra Training Ltd') return 'TTL'
+  return entity
 }
 
 const PRODUCT_CATEGORIES = ['classes', 'training', 'retreat', 'workshop', 'private', 'other'] as const
@@ -46,12 +55,12 @@ export default function ProductsPage() {
   const [fetchError, setFetchError] = useState<string | null>(null)
 
   const [showAddForm, setShowAddForm] = useState(false)
-  const [addForm, setAddForm] = useState({ name: '', category: 'classes' })
+  const [addForm, setAddForm] = useState({ name: '', category: 'classes', entity: 'Laurent Roure' })
   const [addSaving, setAddSaving] = useState(false)
   const [addError, setAddError] = useState<string | null>(null)
 
   const [editingId, setEditingId] = useState<string | null>(null)
-  const [editForm, setEditForm] = useState({ name: '', category: '' })
+  const [editForm, setEditForm] = useState({ name: '', category: '', entity: '' })
   const [editSaving, setEditSaving] = useState(false)
   const [editError, setEditError] = useState<string | null>(null)
 
@@ -81,7 +90,7 @@ export default function ProductsPage() {
       const res = await fetch('/api/products', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: addForm.name.trim(), category: addForm.category }),
+        body: JSON.stringify({ name: addForm.name.trim(), category: addForm.category, entity: addForm.entity }),
       })
       const data = await res.json() as { id?: string; error?: string }
       if (!res.ok) { setAddError(data.error ?? 'Failed to add.'); setAddSaving(false); return }
@@ -89,6 +98,7 @@ export default function ProductsPage() {
         id: data.id!,
         name: addForm.name.trim(),
         category: addForm.category,
+        entity: addForm.entity,
         created_at: new Date().toISOString(),
         archived: false,
       }
@@ -97,7 +107,7 @@ export default function ProductsPage() {
           a.category.localeCompare(b.category) || a.name.localeCompare(b.name)
         )
       )
-      setAddForm({ name: '', category: 'classes' })
+      setAddForm({ name: '', category: 'classes', entity: 'Laurent Roure' })
       setShowAddForm(false)
     } catch {
       setAddError('Network error.')
@@ -108,7 +118,7 @@ export default function ProductsPage() {
 
   function startEdit(p: Product) {
     setEditingId(p.id)
-    setEditForm({ name: p.name, category: p.category })
+    setEditForm({ name: p.name, category: p.category, entity: p.entity })
     setEditError(null)
   }
 
@@ -120,7 +130,7 @@ export default function ProductsPage() {
       const res = await fetch(`/api/products/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: editForm.name.trim(), category: editForm.category }),
+        body: JSON.stringify({ name: editForm.name.trim(), category: editForm.category, entity: editForm.entity }),
       })
       if (!res.ok) {
         const data = await res.json() as { error?: string }
@@ -129,7 +139,7 @@ export default function ProductsPage() {
         return
       }
       setProducts(prev =>
-        prev.map(p => p.id === id ? { ...p, name: editForm.name.trim(), category: editForm.category } : p)
+        prev.map(p => p.id === id ? { ...p, name: editForm.name.trim(), category: editForm.category, entity: editForm.entity } : p)
       )
       setEditingId(null)
     } catch {
@@ -166,7 +176,7 @@ export default function ProductsPage() {
       <div className="px-6 pt-6 pb-4 flex items-center justify-between">
         <h1 className="font-bold" style={{ fontSize: '22px', color: '#1A2C4E' }}>Products</h1>
         <button
-          onClick={() => { setShowAddForm(true); setAddError(null); setAddForm({ name: '', category: 'classes' }) }}
+          onClick={() => { setShowAddForm(true); setAddError(null); setAddForm({ name: '', category: 'classes', entity: 'Laurent Roure' }) }}
           className="flex items-center gap-2 font-semibold text-white text-sm"
           style={{ background: '#1A2C4E', padding: '10px 16px', minHeight: '44px', borderRadius: 0, border: 'none', cursor: 'pointer' }}
         >
@@ -180,7 +190,7 @@ export default function ProductsPage() {
         {showAddForm && (
           <div className="border border-[#e5e7eb] p-4 mb-4" style={{ background: '#f9fafb' }}>
             <p className="font-medium text-sm mb-3" style={{ color: '#1A2C4E' }}>New Product</p>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
               <div>
                 <label className="block text-xs text-gray-500 mb-1">Name *</label>
                 <input
@@ -200,6 +210,18 @@ export default function ProductsPage() {
                 >
                   {PRODUCT_CATEGORIES.map(c => (
                     <option key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Entity *</label>
+                <select
+                  value={addForm.entity}
+                  onChange={e => setAddForm(f => ({ ...f, entity: e.target.value }))}
+                  style={inputStyle}
+                >
+                  {ENTITIES.map(e => (
+                    <option key={e} value={e}>{e}</option>
                   ))}
                 </select>
               </div>
@@ -267,6 +289,15 @@ export default function ProductsPage() {
                                     <option key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</option>
                                   ))}
                                 </select>
+                                <select
+                                  value={editForm.entity}
+                                  onChange={e => setEditForm(f => ({ ...f, entity: e.target.value }))}
+                                  style={{ ...inlineInputStyle, marginTop: '6px' }}
+                                >
+                                  {ENTITIES.map(e => (
+                                    <option key={e} value={e}>{e}</option>
+                                  ))}
+                                </select>
                               </td>
                               <td className="px-4 py-2 hidden md:table-cell"></td>
                               <td className="px-4 py-2">
@@ -290,6 +321,9 @@ export default function ProductsPage() {
                           ) : (
                             <tr key={p.id} className="border-b border-[#f3f4f6]">
                               <td className="px-4 py-3 text-sm font-medium" style={{ color: '#1A2C4E' }}>{p.name}</td>
+                              <td className="px-4 py-3">
+                                <span style={{ background: '#f3f4f6', color: '#374151', padding: '2px 6px', fontSize: '11px', fontWeight: 500, borderRadius: '4px' }}>{entityAbbr(p.entity)}</span>
+                              </td>
                               <td className="px-4 py-3 text-sm text-gray-500 hidden md:table-cell">{formatDate(p.created_at)}</td>
                               <td className="px-4 py-3">
                                 <div className="flex items-center gap-1 justify-end">
@@ -349,6 +383,9 @@ export default function ProductsPage() {
                       <tr key={p.id} className="border-b border-[#f3f4f6]">
                         <td className="px-4 py-3 text-sm text-gray-400">{p.name}</td>
                         <td className="px-4 py-3 text-sm text-gray-400">{p.category}</td>
+                        <td className="px-4 py-3">
+                          <span style={{ background: '#f3f4f6', color: '#374151', padding: '2px 6px', fontSize: '11px', fontWeight: 500, borderRadius: '4px' }}>{entityAbbr(p.entity)}</span>
+                        </td>
                         <td className="px-4 py-3 text-right">
                           <button
                             onClick={() => handleArchive(p.id, false)}

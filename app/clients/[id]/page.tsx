@@ -35,7 +35,7 @@ export default async function ClientDetailPage({ params }: Props) {
       .order('created_at', { ascending: false }),
     supabase
       .from('products')
-      .select('id, name, category')
+      .select('id, name, category, entity')
       .neq('archived', true)
       .order('category', { ascending: true })
       .order('name', { ascending: true }),
@@ -94,6 +94,7 @@ export default async function ClientDetailPage({ params }: Props) {
     id: p.id as string,
     name: p.name as string,
     category: p.category as string,
+    entity: p.entity as string,
   }))
 
   return (

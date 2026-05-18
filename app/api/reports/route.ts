@@ -13,6 +13,7 @@ interface ProductEmbed {
   id: string
   name: string
   category: string
+  entity: string
 }
 
 interface PurchaseRow {
@@ -43,7 +44,7 @@ export async function GET(request: NextRequest) {
 
   let query = supabase
     .from('purchases')
-    .select('id, person_id, amount_gbp, purchase_date, people!inner(id, first_name, last_name, email, status), products(id, name, category)')
+    .select('id, person_id, amount_gbp, purchase_date, people!inner(id, first_name, last_name, email, status), products(id, name, category, entity)')
     .limit(10000)
 
   if (dateFrom) query = query.gte('purchase_date', dateFrom)
@@ -164,5 +165,18 @@ export async function GET(request: NextRequest) {
     .map(t => ({ name: t.name, cohort_year: t.cohort_year, total_revenue: t.total_revenue, client_count: t.persons.size }))
     .sort((a, b) => a.name.localeCompare(b.name) || b.cohort_year - a.cohort_year)
 
-  return NextResponse.json({ topSpenders, byCategory, retreats, trainingByCohort })
+  // ── Revenue split by entity ───────────────────────────────────────────────────
+  let revenueTotal = 0
+  let revenueLR = 0
+  let revenueTTL = 0
+  for (const row of purchases) {
+    const amt = Number(row.amount_gbp ?? 0)
+    const product = getProduct(row)
+    revenueTotal += amt
+    if (product?.entity === 'Laurent Roure') revenueLR += amt
+    else if (product?.entity === 'Terra Training Ltd') revenueTTL += amt
+  }
+  const revenueByEntity = { total: revenueTotal, lr: revenueLR, ttl: revenueTTL }
+
+  return NextResponse.json({ topSpenders, byCategory, retreats, trainingByCohort, revenueByEntity })
 }

@@ -48,6 +48,7 @@ interface ReportsData {
   }
   retreats: RetreatRow[]
   trainingByCohort: TrainingRow[]
+  revenueByEntity: { total: number; lr: number; ttl: number }
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -138,6 +139,32 @@ function Empty() {
     <p className="text-gray-400 italic text-sm text-center py-4">
       No data for the selected period.
     </p>
+  )
+}
+
+// ── Revenue Summary Block ─────────────────────────────────────────────────────
+
+function RevenueSummaryBlock({ data }: { data: { total: number; lr: number; ttl: number } }) {
+  return (
+    <div className="border border-[#e5e7eb] p-5 mb-2" style={{ background: '#f9fafb' }}>
+      <p className="uppercase tracking-wide text-xs mb-3" style={{ color: '#6b7280' }}>Revenue for Selected Period</p>
+      <div className="flex flex-col gap-2">
+        <div className="flex justify-between items-baseline">
+          <span className="font-bold" style={{ fontSize: '22px', color: '#1A2C4E' }}>£{data.total.toFixed(2)}</span>
+          <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: '#6b7280' }}>Total</span>
+        </div>
+        <div className="border-t border-[#e5e7eb] pt-2 flex flex-col gap-1.5">
+          <div className="flex justify-between items-center">
+            <span className="text-sm" style={{ color: '#374151' }}>Laurent Roure</span>
+            <span className="text-sm font-medium" style={{ color: '#374151' }}>£{data.lr.toFixed(2)}</span>
+          </div>
+          <div className="flex justify-between items-center">
+            <span className="text-sm" style={{ color: '#374151' }}>Terra Training Ltd</span>
+            <span className="text-sm font-medium" style={{ color: '#374151' }}>£{data.ttl.toFixed(2)}</span>
+          </div>
+        </div>
+      </div>
+    </div>
   )
 }
 
@@ -552,6 +579,7 @@ export default function ReportsPage() {
 
       {!loading && !error && data && (
         <>
+          <RevenueSummaryBlock data={data.revenueByEntity} />
           <TopSpendersSection data={data.topSpenders} />
           <ByCategorySection data={data.byCategory} />
           <RetreatsSection data={data.retreats} />

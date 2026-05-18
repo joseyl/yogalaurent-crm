@@ -45,7 +45,7 @@ async function fetchDashboardData() {
     supabase.from('people').select('*', { count: 'exact', head: true }).eq('status', 'client'),
     supabase.from('leads').select('*', { count: 'exact', head: true }).in('status', ['new', 'contacted', 'quoted']),
     supabase.from('purchases').select('amount_gbp').gte('purchase_date', firstOfMonth).lt('purchase_date', firstOfNextMonth),
-    supabase.from('purchases').select('amount_gbp').gte('purchase_date', firstOfYear).lt('purchase_date', firstOfNextYear),
+    supabase.from('purchases').select('amount_gbp, products(entity)').gte('purchase_date', firstOfYear).lt('purchase_date', firstOfNextYear),
     supabase.from('leads').select('id, last_followup_date, date_added, assigned_to, people(first_name, last_name)').in('status', ['new', 'contacted', 'quoted']),
     supabase.from('attendance').select('person_id, class_date').gte('class_date', oneEightyDaysAgo),
     supabase.from('people').select('id, first_name, last_name').eq('status', 'client'),
@@ -56,7 +56,16 @@ async function fetchDashboardData() {
 
   // Summary
   const revenueThisMonth = (monthPurchases ?? []).reduce((s, p) => s + Number(p.amount_gbp ?? 0), 0)
-  const revenueThisYear = (yearPurchases ?? []).reduce((s, p) => s + Number(p.amount_gbp ?? 0), 0)
+  let revenueThisYear = 0
+  let revenueThisYearLR = 0
+  let revenueThisYearTTL = 0
+  for (const p of yearPurchases ?? []) {
+    const amt = Number(p.amount_gbp ?? 0)
+    const prod = p.products as unknown as { entity: string } | null
+    revenueThisYear += amt
+    if (prod?.entity === 'Laurent Roure') revenueThisYearLR += amt
+    else if (prod?.entity === 'Terra Training Ltd') revenueThisYearTTL += amt
+  }
 
   // Stale leads
   const staleLeads = (openLeadsData ?? [])
@@ -121,7 +130,7 @@ async function fetchDashboardData() {
   }
 
   return {
-    summary: { activeClients: activeClients ?? 0, openLeads: openLeads ?? 0, revenueThisMonth, revenueThisYear },
+    summary: { activeClients: activeClients ?? 0, openLeads: openLeads ?? 0, revenueThisMonth, revenueThisYear, revenueThisYearLR, revenueThisYearTTL },
     staleLeads,
     goneQuiet,
     categoryRevenue,
@@ -146,7 +155,7 @@ export default async function DashboardPage() {
         <SummaryCard label="Active Clients" value={summary.activeClients.toString()} />
         <SummaryCard label="Open Leads" value={summary.openLeads.toString()} />
         <SummaryCard label="Revenue This Month" value={`£${summary.revenueThisMonth.toFixed(2)}`} />
-        <SummaryCard label="Revenue This Year" value={`£${summary.revenueThisYear.toFixed(2)}`} />
+        <RevenueYearCard total={summary.revenueThisYear} lr={summary.revenueThisYearLR} ttl={summary.revenueThisYearTTL} />
       </div>
 
       {/* Alert panels */}
@@ -220,6 +229,25 @@ export default async function DashboardPage() {
         >
           Add Lead
         </Link>
+      </div>
+    </div>
+  )
+}
+
+function RevenueYearCard({ total, lr, ttl }: { total: number; lr: number; ttl: number }) {
+  return (
+    <div className="bg-white border border-[#e5e7eb] rounded-sm p-5">
+      <p className="uppercase tracking-wide text-xs" style={{ color: '#6b7280' }}>Revenue This Year</p>
+      <p className="font-bold mt-1" style={{ fontSize: '28px', color: '#1A2C4E' }}>£{total.toFixed(2)}</p>
+      <div className="mt-2 space-y-0.5">
+        <div className="flex justify-between">
+          <span className="text-xs" style={{ color: '#6b7280' }}>Laurent Roure</span>
+          <span className="text-xs font-medium" style={{ color: '#6b7280' }}>£{lr.toFixed(2)}</span>
+        </div>
+        <div className="flex justify-between">
+          <span className="text-xs" style={{ color: '#6b7280' }}>Terra Training Ltd</span>
+          <span className="text-xs font-medium" style={{ color: '#6b7280' }}>£{ttl.toFixed(2)}</span>
+        </div>
       </div>
     </div>
   )

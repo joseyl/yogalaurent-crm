@@ -8,6 +8,7 @@ interface Product {
   id: string
   name: string
   category: string
+  entity: string
 }
 
 interface Purchase {
