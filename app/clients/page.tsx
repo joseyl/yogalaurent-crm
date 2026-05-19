@@ -279,7 +279,7 @@ export default function ClientsPage() {
           <option value="classes">Classes</option>
           <option value="training">Training</option>
           <option value="retreat">Retreat</option>
-          <option value="workshop">Workshop</option>
+          <option value="workshop">In-person Workshop</option>
           <option value="private">Private</option>
           <option value="other">Other</option>
         </select>

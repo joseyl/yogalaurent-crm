@@ -1,7 +1,9 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import Link from 'next/link'
 import { Plus, Edit2, Archive, ArchiveRestore } from 'lucide-react'
+import { categoryLabel } from '@/lib/utils'
 
 interface Product {
   id: string
@@ -20,7 +22,7 @@ function entityAbbr(entity: string): string {
   return entity
 }
 
-const PRODUCT_CATEGORIES = ['classes', 'training', 'retreat', 'workshop', 'private', 'other'] as const
+const PRODUCT_CATEGORIES = ['training', 'retreat', 'workshop', 'classes', 'private', 'other'] as const
 
 function formatDate(dateStr: string): string {
   const d = new Date(dateStr)
@@ -209,7 +211,7 @@ export default function ProductsPage() {
                   style={inputStyle}
                 >
                   {PRODUCT_CATEGORIES.map(c => (
-                    <option key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</option>
+                    <option key={c} value={c}>{categoryLabel(c)}</option>
                   ))}
                 </select>
               </div>
@@ -261,7 +263,7 @@ export default function ProductsPage() {
                     className="text-sm font-semibold uppercase tracking-wide mb-2"
                     style={{ color: '#1A2C4E' }}
                   >
-                    {cat.charAt(0).toUpperCase() + cat.slice(1)}
+                    {categoryLabel(cat)}
                   </h2>
                   <div className="border border-[#e5e7eb]">
                     <table className="w-full border-collapse">
@@ -320,7 +322,9 @@ export default function ProductsPage() {
                             </tr>
                           ) : (
                             <tr key={p.id} className="border-b border-[#f3f4f6]">
-                              <td className="px-4 py-3 text-sm font-medium" style={{ color: '#1A2C4E' }}>{p.name}</td>
+                              <td className="px-4 py-3 text-sm font-medium" style={{ color: '#1A2C4E' }}>
+                                <Link href={`/products/${p.id}`} className="hover:underline">{p.name}</Link>
+                              </td>
                               <td className="px-4 py-3">
                                 <span style={{ background: '#f3f4f6', color: '#374151', padding: '2px 6px', fontSize: '11px', fontWeight: 500, borderRadius: '4px' }}>{entityAbbr(p.entity)}</span>
                               </td>

@@ -321,7 +321,7 @@ function ByCategorySection({
     { key: 'classes', label: 'Classes' },
     { key: 'training', label: 'Training' },
     { key: 'retreat', label: 'Retreats' },
-    { key: 'workshop', label: 'Workshops' },
+    { key: 'workshop', label: 'In-person Workshops' },
   ]
 
   function exportCategory(key: keyof ReportsData['byCategory']) {

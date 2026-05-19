@@ -3,7 +3,7 @@
 import { useState, Fragment } from 'react'
 import { Edit2, Trash2, RefreshCcw, Plus } from 'lucide-react'
 import StatusBadge from '@/components/StatusBadge'
-import { formatGBP } from '@/lib/utils'
+import { formatGBP, categoryLabel } from '@/lib/utils'
 
 interface Product {
   id: string
@@ -511,7 +511,7 @@ export default function ClientTabs({ personId, purchases, attendance, leads, pro
               >
                 {CATEGORIES.map(c => (
                   <option key={c} value={c}>
-                    {c === 'All Categories' ? 'All Categories' : c.charAt(0).toUpperCase() + c.slice(1)}
+                    {c === 'All Categories' ? 'All Categories' : categoryLabel(c)}
                   </option>
                 ))}
               </select>

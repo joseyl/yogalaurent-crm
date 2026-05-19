@@ -8,6 +8,12 @@ const personConfig: Record<string, { bg: string; text: string; label: string }> 
   lead:     { bg: '#fef9c3', text: '#854d0e', label: 'Lead' },
   inactive: { bg: '#f3f4f6', text: '#6b7280', label: 'Inactive' },
   deceased: { bg: '#fee2e2', text: '#991b1b', label: 'Deceased' },
+  classes:  { bg: '#f3f4f6', text: '#6b7280', label: 'Classes' },
+  training: { bg: '#f3f4f6', text: '#6b7280', label: 'Training' },
+  retreat:  { bg: '#f3f4f6', text: '#6b7280', label: 'Retreat' },
+  workshop: { bg: '#f3f4f6', text: '#6b7280', label: 'In-person Workshop' },
+  private:  { bg: '#f3f4f6', text: '#6b7280', label: 'Private' },
+  other:    { bg: '#f3f4f6', text: '#6b7280', label: 'Other' },
 }
 
 const leadConfig: Record<string, { bg: string; text: string; label: string }> = {
