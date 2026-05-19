@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { createServerClient } from '@/lib/supabase/server'
 import DashboardCharts from '@/components/charts/DashboardCharts'
+import ExpiringPassesPanel from '@/components/ExpiringPassesPanel'
 import { formatGBP } from '@/lib/utils'
 
 const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
@@ -201,6 +202,8 @@ export default async function DashboardPage() {
             ))
           )}
         </AlertPanel>
+
+        <ExpiringPassesPanel />
       </div>
 
       {/* Charts */}
