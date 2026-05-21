@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import StatusBadge from '@/components/StatusBadge'
-import { formatGBP } from '@/lib/utils'
+import { formatGBP, categoryLabel } from '@/lib/utils'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -464,6 +464,129 @@ function TrainingSection({ data }: { data: TrainingRow[] }) {
   )
 }
 
+// ── Section 5: Interests Summary ─────────────────────────────────────────────
+
+interface InterestSummaryRow {
+  product_id: string
+  product_name: string
+  category: string
+  count: number
+}
+
+const INTEREST_CATEGORY_ORDER = ['training', 'retreat', 'workshop', 'classes', 'private', 'other']
+
+function InterestsSummarySection({ data }: { data: InterestSummaryRow[] }) {
+  const [showZero, setShowZero] = useState(false)
+
+  function exportCsv() {
+    const headers = ['Category', 'Product', 'Potential Buyers']
+    const rows = data.map(r => [categoryLabel(r.category), r.product_name, String(r.count)])
+    downloadCsv([headers, ...rows], `interests-summary-${today()}.csv`)
+  }
+
+  const grouped: Record<string, InterestSummaryRow[]> = {}
+  for (const row of data) {
+    if (!grouped[row.category]) grouped[row.category] = []
+    grouped[row.category].push(row)
+  }
+
+  const orderedCategories = INTEREST_CATEGORY_ORDER.filter(c => grouped[c])
+
+  return (
+    <>
+      <SectionHeading title="Interests Summary" onExport={exportCsv} />
+      <div className="flex items-center gap-2 mb-4">
+        <input
+          type="checkbox"
+          id="show-zero-interests"
+          checked={showZero}
+          onChange={e => setShowZero(e.target.checked)}
+          style={{ width: '16px', height: '16px', cursor: 'pointer', borderRadius: 0 }}
+        />
+        <label htmlFor="show-zero-interests" className="text-sm text-gray-600" style={{ cursor: 'pointer' }}>
+          Show products with zero interests
+        </label>
+      </div>
+
+      {data.length === 0 ? <Empty /> : (
+        <div className="hidden md:block">
+          <table className="w-full border-collapse">
+            <thead>
+              <tr>
+                <th style={thStyle}>Product</th>
+                <th style={{ ...thStyle, textAlign: 'right' }}>Potential Buyers</th>
+              </tr>
+            </thead>
+            <tbody>
+              {orderedCategories.map(cat => {
+                const rows = grouped[cat].filter(r => showZero || r.count > 0)
+                if (rows.length === 0) return null
+                return (
+                  <>
+                    <tr key={`cat-${cat}`}>
+                      <td
+                        colSpan={2}
+                        style={{
+                          ...tdStyle,
+                          background: '#f3f4f6',
+                          fontWeight: 600,
+                          fontSize: '12px',
+                          color: '#374151',
+                          textTransform: 'uppercase',
+                          letterSpacing: '0.05em',
+                          paddingLeft: '8px',
+                        }}
+                      >
+                        {categoryLabel(cat)}
+                      </td>
+                    </tr>
+                    {rows.map(r => (
+                      <tr key={r.product_id}>
+                        <td style={{ ...tdStyle, color: '#1A2C4E', paddingLeft: '8px' }}>{r.product_name}</td>
+                        <td style={{ ...tdStyle, textAlign: 'right', fontWeight: r.count > 0 ? 600 : undefined, color: r.count === 0 ? '#9ca3af' : undefined }}>
+                          {r.count}
+                        </td>
+                      </tr>
+                    ))}
+                  </>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Mobile */}
+      {data.length > 0 && (
+        <div className="md:hidden space-y-4">
+          {orderedCategories.map(cat => {
+            const rows = grouped[cat].filter(r => showZero || r.count > 0)
+            if (rows.length === 0) return null
+            return (
+              <div key={cat}>
+                <p
+                  className="text-xs uppercase tracking-wide font-semibold mb-2 px-1"
+                  style={{ color: '#374151', background: '#f3f4f6', padding: '4px 8px' }}
+                >
+                  {categoryLabel(cat)}
+                </p>
+                <div className="space-y-1">
+                  {rows.map(r => (
+                    <div key={r.product_id} className="flex justify-between items-center border border-[#e5e7eb] px-3 py-2" style={{ borderRadius: 0 }}>
+                      <span className="text-sm" style={{ color: '#1A2C4E' }}>{r.product_name}</span>
+                      <span className="text-sm font-semibold" style={{ color: r.count === 0 ? '#9ca3af' : '#1A2C4E' }}>{r.count}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </>
+  )
+}
+
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
 export default function ReportsPage() {
@@ -472,6 +595,9 @@ export default function ReportsPage() {
   const [error, setError] = useState<string | null>(null)
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
+
+  const [interestsSummary, setInterestsSummary] = useState<InterestSummaryRow[]>([])
+  const [interestsSummaryLoading, setInterestsSummaryLoading] = useState(true)
 
   useEffect(() => {
     let cancelled = false
@@ -492,6 +618,19 @@ export default function ReportsPage() {
       })
     return () => { cancelled = true }
   }, [dateFrom, dateTo])
+
+  useEffect(() => {
+    let cancelled = false
+    fetch('/api/interests/summary')
+      .then(r => r.json())
+      .then((d: InterestSummaryRow[]) => {
+        if (!cancelled) { setInterestsSummary(d); setInterestsSummaryLoading(false) }
+      })
+      .catch(() => {
+        if (!cancelled) setInterestsSummaryLoading(false)
+      })
+    return () => { cancelled = true }
+  }, [])
 
   function handleDateFrom(value: string) {
     setLoading(true)
@@ -586,6 +725,10 @@ export default function ReportsPage() {
           <RetreatsSection data={data.retreats} />
           <TrainingSection data={data.trainingByCohort} />
         </>
+      )}
+
+      {!interestsSummaryLoading && (
+        <InterestsSummarySection data={interestsSummary} />
       )}
     </div>
   )

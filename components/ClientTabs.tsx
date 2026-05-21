@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, Fragment } from 'react'
+import { useState, useEffect, Fragment } from 'react'
 import { Edit2, Trash2, RefreshCcw, Plus } from 'lucide-react'
 import StatusBadge from '@/components/StatusBadge'
 import { formatGBP, categoryLabel } from '@/lib/utils'
@@ -39,6 +39,17 @@ interface LeadRecord {
   product_name: string | null
 }
 
+interface Interest {
+  id: string
+  product_id: string
+  source: string | null
+  added_date: string
+  added_by: string
+  notes: string | null
+  product_name: string
+  category: string
+}
+
 interface PurchaseFormState {
   product_id: string
   amount_gbp: string
@@ -66,7 +77,7 @@ function todayStr(): string {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
 }
 
-const TABS = ['Purchases', 'Attendance', 'Lead History'] as const
+const TABS = ['Purchases', 'Attendance', 'Lead History', 'Interests'] as const
 type Tab = typeof TABS[number]
 
 const CATEGORIES = ['All Categories', 'classes', 'training', 'retreat', 'workshop', 'private', 'other']
@@ -95,6 +106,18 @@ const inlineInputStyle: React.CSSProperties = {
 
 const primaryBtnStyle: React.CSSProperties = {
   background: '#1A2C4E',
+  color: 'white',
+  border: 'none',
+  padding: '10px 16px',
+  fontSize: '13px',
+  fontWeight: 600,
+  minHeight: '44px',
+  borderRadius: 0,
+  cursor: 'pointer',
+}
+
+const amberBtnStyle: React.CSSProperties = {
+  background: '#B8540A',
   color: 'white',
   border: 'none',
   padding: '10px 16px',
@@ -192,13 +215,13 @@ export default function ClientTabs({ personId, purchases, attendance, leads, pro
 
   const [purchaseList, setPurchaseList] = useState<Purchase[]>(purchases)
 
-  // Add form
+  // Add purchase form
   const [showAddForm, setShowAddForm] = useState(false)
   const [addForm, setAddForm] = useState<PurchaseFormState>({ product_id: '', amount_gbp: '', purchase_date: todayStr(), notes: '' })
   const [addSaving, setAddSaving] = useState(false)
   const [addError, setAddError] = useState<string | null>(null)
 
-  // Edit form
+  // Edit purchase form
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editForm, setEditForm] = useState<PurchaseFormState>({ product_id: '', amount_gbp: '', purchase_date: '', notes: '' })
   const [editSaving, setEditSaving] = useState(false)
@@ -209,6 +232,21 @@ export default function ClientTabs({ personId, purchases, attendance, leads, pro
   const [refundForm, setRefundForm] = useState({ amount: '', note: '' })
   const [refundSaving, setRefundSaving] = useState(false)
   const [refundError, setRefundError] = useState<string | null>(null)
+
+  // Interests state — null means not yet fetched (shows loading)
+  const [interests, setInterests] = useState<Interest[] | null>(null)
+  const [showAddInterestForm, setShowAddInterestForm] = useState(false)
+  const [addInterestForm, setAddInterestForm] = useState({ product_id: '', source: '', notes: '' })
+  const [addInterestSaving, setAddInterestSaving] = useState(false)
+  const [addInterestError, setAddInterestError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (activeTab !== 'Interests') return
+    fetch(`/api/interests/by-person/${personId}`)
+      .then(r => r.json() as Promise<Interest[]>)
+      .then(d => setInterests(d))
+      .catch(() => setInterests([]))
+  }, [activeTab, personId])
 
   const totalSpend = purchaseList.reduce((s, p) => s + Number(p.amount_gbp ?? 0), 0)
 
@@ -403,28 +441,83 @@ export default function ClientTabs({ personId, purchases, attendance, leads, pro
     }
   }
 
+  // ── Add interest ──────────────────────────────────────────────────────────
+
+  function openAddInterestForm() {
+    setShowAddInterestForm(true)
+    setAddInterestForm({ product_id: '', source: '', notes: '' })
+    setAddInterestError(null)
+  }
+
+  async function handleAddInterest() {
+    if (!addInterestForm.product_id) { setAddInterestError('Please select a product.'); return }
+    setAddInterestSaving(true)
+    setAddInterestError(null)
+    try {
+      const res = await fetch('/api/interests', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          person_id: personId,
+          product_id: addInterestForm.product_id,
+          source: addInterestForm.source || null,
+          notes: addInterestForm.notes || null,
+        }),
+      })
+      const data = await res.json() as { error?: string }
+      if (res.status === 409) {
+        setAddInterestError('This person is already tagged as interested in that product.')
+        setAddInterestSaving(false)
+        return
+      }
+      if (!res.ok) { setAddInterestError(data.error ?? 'Failed to add.'); setAddInterestSaving(false); return }
+      const refreshRes = await fetch(`/api/interests/by-person/${personId}`)
+      const refreshed = await refreshRes.json() as Interest[]
+      setInterests(refreshed as Interest[])
+      setShowAddInterestForm(false)
+    } catch {
+      setAddInterestError('Network error.')
+    } finally {
+      setAddInterestSaving(false)
+    }
+  }
+
+  // ── Remove interest ───────────────────────────────────────────────────────
+
+  async function handleRemoveInterest(id: string) {
+    try {
+      const res = await fetch(`/api/interests?id=${id}`, { method: 'DELETE' })
+      if (!res.ok) return
+      setInterests(prev => prev ? prev.filter(i => i.id !== id) : prev)
+    } catch {
+      // silent
+    }
+  }
+
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
     <div>
-      {/* Tab bar */}
-      <div className="border-b border-[#e5e7eb] flex">
-        {TABS.map(tab => (
-          <button
-            key={tab}
-            onClick={() => setActiveTab(tab)}
-            className="px-4 py-3 text-sm font-medium transition-colors"
-            style={{
-              color: activeTab === tab ? '#1A2C4E' : '#6b7280',
-              borderBottom: activeTab === tab ? '2px solid #1A2C4E' : '2px solid transparent',
-              fontWeight: activeTab === tab ? 600 : 400,
-              background: 'none',
-              cursor: 'pointer',
-            }}
-          >
-            {tab}
-          </button>
-        ))}
+      {/* Tab bar — scrollable on mobile */}
+      <div className="border-b border-[#e5e7eb] overflow-x-auto">
+        <div className="flex">
+          {TABS.map(tab => (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className="px-4 py-3 text-sm font-medium transition-colors whitespace-nowrap"
+              style={{
+                color: activeTab === tab ? '#1A2C4E' : '#6b7280',
+                borderBottom: activeTab === tab ? '2px solid #1A2C4E' : '2px solid transparent',
+                fontWeight: activeTab === tab ? 600 : 400,
+                background: 'none',
+                cursor: 'pointer',
+              }}
+            >
+              {tab}
+            </button>
+          ))}
+        </div>
       </div>
 
       <div className="p-4">
@@ -871,6 +964,116 @@ export default function ClientTabs({ personId, purchases, attendance, leads, pro
             )}
           </div>
         )}
+
+        {/* ── INTERESTS TAB ──────────────────────────────────────────────── */}
+        {activeTab === 'Interests' && (
+          <div>
+            <div className="flex items-center justify-between mb-4">
+              <p className="font-bold" style={{ color: '#1A2C4E' }}>Interests</p>
+              <button
+                onClick={openAddInterestForm}
+                className="font-semibold text-white text-sm"
+                style={{ ...amberBtnStyle, padding: '8px 14px', minHeight: '36px' }}
+              >
+                Add interest
+              </button>
+            </div>
+
+            {/* Add interest form */}
+            {showAddInterestForm && (
+              <div className="border border-[#e5e7eb] p-4 mb-4" style={{ background: '#f9fafb' }}>
+                <p className="font-medium text-sm mb-3" style={{ color: '#1A2C4E' }}>New Interest</p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">Product *</label>
+                    <ProductSelect
+                      value={addInterestForm.product_id}
+                      onChange={v => setAddInterestForm(f => ({ ...f, product_id: v }))}
+                      grouped={groupedProducts}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">Source</label>
+                    <input
+                      type="text"
+                      placeholder="How did this come up? e.g. completed 60hr, asked at retreat"
+                      value={addInterestForm.source}
+                      onChange={e => setAddInterestForm(f => ({ ...f, source: e.target.value }))}
+                      style={formInputStyle}
+                    />
+                  </div>
+                  <div className="md:col-span-2">
+                    <label className="block text-xs text-gray-500 mb-1">Notes</label>
+                    <textarea
+                      value={addInterestForm.notes}
+                      onChange={e => setAddInterestForm(f => ({ ...f, notes: e.target.value }))}
+                      rows={2}
+                      style={{ ...formInputStyle, resize: 'vertical' }}
+                    />
+                  </div>
+                </div>
+                {addInterestError && <p className="text-red-500 text-xs mb-2">{addInterestError}</p>}
+                <div className="flex gap-2">
+                  <button
+                    onClick={handleAddInterest}
+                    disabled={addInterestSaving}
+                    style={{ ...amberBtnStyle, opacity: addInterestSaving ? 0.6 : 1 }}
+                  >
+                    {addInterestSaving ? 'Saving...' : 'Save'}
+                  </button>
+                  <button onClick={() => { setShowAddInterestForm(false); setAddInterestError(null) }} style={cancelBtnStyle}>
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {interests === null ? (
+              <p className="text-gray-400 text-sm">Loading...</p>
+            ) : interests.length === 0 ? (
+              <p className="text-gray-400 text-sm">No interests recorded yet.</p>
+            ) : (
+              <div className="space-y-2">
+                {interests.map(interest => (
+                  <div
+                    key={interest.id}
+                    className="flex items-center justify-between border border-[#e5e7eb] p-3"
+                    style={{ borderRadius: 0 }}
+                  >
+                    <div className="flex flex-col gap-0.5 flex-1 min-w-0 pr-3">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-medium text-sm" style={{ color: '#1A2C4E' }}>{interest.product_name}</span>
+                        <StatusBadge status={interest.category} type="person" />
+                      </div>
+                      <div className="flex items-center gap-3 flex-wrap mt-0.5">
+                        {interest.source && <span className="text-xs text-gray-500">{interest.source}</span>}
+                        <span className="text-xs text-gray-400">{formatDate(interest.added_date)}</span>
+                        <span className="text-xs text-gray-400">{interest.added_by}</span>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => handleRemoveInterest(interest.id)}
+                      style={{
+                        background: 'none',
+                        border: '1px solid #d1d5db',
+                        padding: '4px 10px',
+                        borderRadius: 0,
+                        cursor: 'pointer',
+                        color: '#374151',
+                        fontSize: '12px',
+                        minHeight: '32px',
+                        flexShrink: 0,
+                      }}
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
       </div>
     </div>
   )
