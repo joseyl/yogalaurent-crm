@@ -35,7 +35,7 @@ def parse_amount(raw):
     if not raw or not raw.strip():
         return 0.00
     try:
-        val = float(raw.replace(",", "").strip())
+        val = float(raw.strip().lstrip('\xa3£').replace(",", "").strip())
         if math.isnan(val) or math.isinf(val):
             return 0.00
         return val

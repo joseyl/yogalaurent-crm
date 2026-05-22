@@ -2919,42 +2919,42 @@ FROM people p, products pr
 WHERE (lower(p.email) = 'k.jironet@icloud.com' OR lower(p.alt_email) = 'k.jironet@icloud.com')
   AND pr.name = 'Breathwork Professional Training - 40hr';
 INSERT INTO purchases (person_id, product_id, amount_gbp, purchase_date, notes, edition, cohort_year)
-SELECT p.id, pr.id, 0.00, '2026-04-15', NULL, 'Spring', 2026
+SELECT p.id, pr.id, 965.00, '2026-04-15', NULL, 'Spring', 2026
 FROM people p, products pr
 WHERE (lower(p.email) = 'richard_rowlands1@hotmail.com' OR lower(p.alt_email) = 'richard_rowlands1@hotmail.com')
   AND pr.name = 'Breathwork Professional Training - 100hr Bundle';
 INSERT INTO purchases (person_id, product_id, amount_gbp, purchase_date, notes, edition, cohort_year)
-SELECT p.id, pr.id, 0.00, '2026-04-15', NULL, 'Spring', 2026
+SELECT p.id, pr.id, 972.00, '2026-04-15', NULL, 'Spring', 2026
 FROM people p, products pr
 WHERE (lower(p.email) = 'camillacarissaxx@gmail.com' OR lower(p.alt_email) = 'camillacarissaxx@gmail.com')
   AND pr.name = 'Breathwork Professional Training - 100hr Bundle';
 INSERT INTO purchases (person_id, product_id, amount_gbp, purchase_date, notes, edition, cohort_year)
-SELECT p.id, pr.id, 0.00, '2026-04-15', NULL, 'Spring', 2026
+SELECT p.id, pr.id, 850.00, '2026-04-15', NULL, 'Spring', 2026
 FROM people p, products pr
 WHERE (lower(p.email) = 'willdurkan@gmail.com' OR lower(p.alt_email) = 'willdurkan@gmail.com')
   AND pr.name = 'Breathwork Professional Training - 100hr Bundle';
 INSERT INTO purchases (person_id, product_id, amount_gbp, purchase_date, notes, edition, cohort_year)
-SELECT p.id, pr.id, 0.00, '2026-04-15', NULL, 'Spring', 2026
+SELECT p.id, pr.id, 972.00, '2026-04-15', NULL, 'Spring', 2026
 FROM people p, products pr
 WHERE (lower(p.email) = 'sardruce@hotmail.com' OR lower(p.alt_email) = 'sardruce@hotmail.com')
   AND pr.name = 'Breathwork Professional Training - 100hr Bundle';
 INSERT INTO purchases (person_id, product_id, amount_gbp, purchase_date, notes, edition, cohort_year)
-SELECT p.id, pr.id, 0.00, '2026-04-15', NULL, 'Spring', 2026
+SELECT p.id, pr.id, 972.00, '2026-04-15', NULL, 'Spring', 2026
 FROM people p, products pr
 WHERE (lower(p.email) = 'sadiayc@gmail.com' OR lower(p.alt_email) = 'sadiayc@gmail.com')
   AND pr.name = 'Breathwork Professional Training - 100hr Bundle';
 INSERT INTO purchases (person_id, product_id, amount_gbp, purchase_date, notes, edition, cohort_year)
-SELECT p.id, pr.id, 0.00, '2026-04-15', NULL, 'Spring', 2026
+SELECT p.id, pr.id, 972.00, '2026-04-15', NULL, 'Spring', 2026
 FROM people p, products pr
 WHERE (lower(p.email) = 'danielle_blackie@hotmail.co.uk' OR lower(p.alt_email) = 'danielle_blackie@hotmail.co.uk')
   AND pr.name = 'Breathwork Professional Training - 100hr Bundle';
 INSERT INTO purchases (person_id, product_id, amount_gbp, purchase_date, notes, edition, cohort_year)
-SELECT p.id, pr.id, 0.00, '2026-04-15', NULL, 'Spring', 2026
+SELECT p.id, pr.id, 1026.00, '2026-04-15', NULL, 'Spring', 2026
 FROM people p, products pr
 WHERE (lower(p.email) = 'erikalawal@gmail.com' OR lower(p.alt_email) = 'erikalawal@gmail.com')
   AND pr.name = 'Breathwork Professional Training - 100hr Bundle';
 INSERT INTO purchases (person_id, product_id, amount_gbp, purchase_date, notes, edition, cohort_year)
-SELECT p.id, pr.id, 0.00, '2026-04-15', NULL, 'Spring', 2026
+SELECT p.id, pr.id, 1080.00, '2026-04-15', NULL, 'Spring', 2026
 FROM people p, products pr
 WHERE (lower(p.email) = 'anthonyfalconer23@gmail.com' OR lower(p.alt_email) = 'anthonyfalconer23@gmail.com')
   AND pr.name = 'Breathwork Professional Training - 100hr Bundle';
@@ -2999,42 +2999,42 @@ FROM people p, products pr
 WHERE (lower(p.email) = 'anthonyfalconer23@gmail.com' OR lower(p.alt_email) = 'anthonyfalconer23@gmail.com')
   AND pr.name = 'Breathwork Professional Training - 60hr';
 INSERT INTO purchases (person_id, product_id, amount_gbp, purchase_date, notes, edition, cohort_year)
-SELECT p.id, pr.id, 0.00, '2026-04-15', NULL, 'Spring', 2026
+SELECT p.id, pr.id, 648.00, '2026-04-15', NULL, 'Spring', 2026
 FROM people p, products pr
 WHERE (lower(p.email) = 'martin_taylor@me.com' OR lower(p.alt_email) = 'martin_taylor@me.com')
   AND pr.name = 'Breathwork Professional Training - 60hr';
 INSERT INTO purchases (person_id, product_id, amount_gbp, purchase_date, notes, edition, cohort_year)
-SELECT p.id, pr.id, 0.00, '2026-04-15', NULL, 'Spring', 2026
+SELECT p.id, pr.id, 648.00, '2026-04-15', NULL, 'Spring', 2026
 FROM people p, products pr
 WHERE (lower(p.email) = 'elizabethspalding@hotmail.co.uk' OR lower(p.alt_email) = 'elizabethspalding@hotmail.co.uk')
   AND pr.name = 'Breathwork Professional Training - 60hr';
 INSERT INTO purchases (person_id, product_id, amount_gbp, purchase_date, notes, edition, cohort_year)
-SELECT p.id, pr.id, 0.00, '2026-04-15', NULL, 'Spring', 2026
+SELECT p.id, pr.id, 648.00, '2026-04-15', NULL, 'Spring', 2026
 FROM people p, products pr
 WHERE (lower(p.email) = 'willettsue3@gmail.com' OR lower(p.alt_email) = 'willettsue3@gmail.com')
   AND pr.name = 'Breathwork Professional Training - 60hr';
 INSERT INTO purchases (person_id, product_id, amount_gbp, purchase_date, notes, edition, cohort_year)
-SELECT p.id, pr.id, 0.00, '2026-04-15', NULL, 'Spring', 2026
+SELECT p.id, pr.id, 648.00, '2026-04-15', NULL, 'Spring', 2026
 FROM people p, products pr
 WHERE (lower(p.email) = 'hershahanda@hotmail.com' OR lower(p.alt_email) = 'hershahanda@hotmail.com')
   AND pr.name = 'Breathwork Professional Training - 60hr';
 INSERT INTO purchases (person_id, product_id, amount_gbp, purchase_date, notes, edition, cohort_year)
-SELECT p.id, pr.id, 0.00, '2026-04-15', NULL, 'Spring', 2026
+SELECT p.id, pr.id, 684.00, '2026-04-15', NULL, 'Spring', 2026
 FROM people p, products pr
 WHERE (lower(p.email) = 'sophieramsay0@gmail.com' OR lower(p.alt_email) = 'sophieramsay0@gmail.com')
   AND pr.name = 'Breathwork Professional Training - 60hr';
 INSERT INTO purchases (person_id, product_id, amount_gbp, purchase_date, notes, edition, cohort_year)
-SELECT p.id, pr.id, 0.00, '2026-04-15', NULL, 'Spring', 2026
+SELECT p.id, pr.id, 720.00, '2026-04-15', NULL, 'Spring', 2026
 FROM people p, products pr
 WHERE (lower(p.email) = 'lcrompton@talktalk.net' OR lower(p.alt_email) = 'lcrompton@talktalk.net')
   AND pr.name = 'Breathwork Professional Training - 60hr';
 INSERT INTO purchases (person_id, product_id, amount_gbp, purchase_date, notes, edition, cohort_year)
-SELECT p.id, pr.id, 0.00, '2026-04-15', NULL, 'Spring', 2026
+SELECT p.id, pr.id, 648.00, '2026-04-15', NULL, 'Spring', 2026
 FROM people p, products pr
 WHERE (lower(p.email) = 'catriona970@gmail.com' OR lower(p.alt_email) = 'catriona970@gmail.com')
   AND pr.name = 'Breathwork Professional Training - 60hr';
 INSERT INTO purchases (person_id, product_id, amount_gbp, purchase_date, notes, edition, cohort_year)
-SELECT p.id, pr.id, 0.00, '2026-04-15', NULL, 'Spring', 2026
+SELECT p.id, pr.id, 695.00, '2026-04-15', NULL, 'Spring', 2026
 FROM people p, products pr
 WHERE (lower(p.email) = 'asanders100@hotmail.com' OR lower(p.alt_email) = 'asanders100@hotmail.com')
   AND pr.name = 'Breathwork Professional Training - 60hr';
@@ -3079,7 +3079,7 @@ FROM people p, products pr
 WHERE (lower(p.email) = 'anthonyfalconer23@gmail.com' OR lower(p.alt_email) = 'anthonyfalconer23@gmail.com')
   AND pr.name = 'Breathwork Professional Training - 40hr';
 INSERT INTO purchases (person_id, product_id, amount_gbp, purchase_date, notes, edition, cohort_year)
-SELECT p.id, pr.id, 0.00, '2026-04-15', NULL, 'Spring', 2026
+SELECT p.id, pr.id, 430.00, '2026-04-15', NULL, 'Spring', 2026
 FROM people p, products pr
 WHERE (lower(p.email) = 'angiebutterfield50@gmail.com' OR lower(p.alt_email) = 'angiebutterfield50@gmail.com')
   AND pr.name = 'Breathwork Professional Training - 40hr';
@@ -3089,37 +3089,37 @@ FROM people p, products pr
 WHERE (lower(p.email) = 'eaglefeather4@mac.com' OR lower(p.alt_email) = 'eaglefeather4@mac.com')
   AND pr.name = 'Breathwork Professional Training - 40hr';
 INSERT INTO purchases (person_id, product_id, amount_gbp, purchase_date, notes, edition, cohort_year)
-SELECT p.id, pr.id, 0.00, '2026-04-15', NULL, 'Spring', 2026
+SELECT p.id, pr.id, 430.00, '2026-04-15', NULL, 'Spring', 2026
 FROM people p, products pr
 WHERE (lower(p.email) = 'hannah@mayall.net' OR lower(p.alt_email) = 'hannah@mayall.net')
   AND pr.name = 'Breathwork Professional Training - 40hr';
 INSERT INTO purchases (person_id, product_id, amount_gbp, purchase_date, notes, edition, cohort_year)
-SELECT p.id, pr.id, 0.00, '2026-04-15', NULL, 'Spring', 2026
+SELECT p.id, pr.id, 430.00, '2026-04-15', NULL, 'Spring', 2026
 FROM people p, products pr
 WHERE (lower(p.email) = 'nandrew@me.com' OR lower(p.alt_email) = 'nandrew@me.com')
   AND pr.name = 'Breathwork Professional Training - 40hr';
 INSERT INTO purchases (person_id, product_id, amount_gbp, purchase_date, notes, edition, cohort_year)
-SELECT p.id, pr.id, 0.00, '2026-04-15', NULL, 'Spring', 2026
+SELECT p.id, pr.id, 347.00, '2026-04-15', NULL, 'Spring', 2026
 FROM people p, products pr
 WHERE (lower(p.email) = 'elizabethspalding@hotmail.co.uk' OR lower(p.alt_email) = 'elizabethspalding@hotmail.co.uk')
   AND pr.name = 'Breathwork Professional Training - 40hr';
 INSERT INTO purchases (person_id, product_id, amount_gbp, purchase_date, notes, edition, cohort_year)
-SELECT p.id, pr.id, 0.00, '2026-10-15', NULL, 'Autumn', 2026
+SELECT p.id, pr.id, 300.00, '2026-10-15', NULL, 'Autumn', 2026
 FROM people p, products pr
 WHERE (lower(p.email) = 'asanders100@hotmail.com' OR lower(p.alt_email) = 'asanders100@hotmail.com')
   AND pr.name = 'Breathwork Professional Training - 40hr';
 INSERT INTO purchases (person_id, product_id, amount_gbp, purchase_date, notes, edition, cohort_year)
-SELECT p.id, pr.id, 0.00, '2026-04-15', NULL, 'Spring', 2026
+SELECT p.id, pr.id, 324.00, '2026-04-15', NULL, 'Spring', 2026
 FROM people p, products pr
 WHERE (lower(p.email) = 'catriona970@gmail.com' OR lower(p.alt_email) = 'catriona970@gmail.com')
   AND pr.name = 'Breathwork Professional Training - 40hr';
 INSERT INTO purchases (person_id, product_id, amount_gbp, purchase_date, notes, edition, cohort_year)
-SELECT p.id, pr.id, 0.00, '2026-04-15', NULL, 'Spring', 2026
+SELECT p.id, pr.id, 327.00, '2026-04-15', NULL, 'Spring', 2026
 FROM people p, products pr
 WHERE (lower(p.email) = 'willettsue3@gmail.com' OR lower(p.alt_email) = 'willettsue3@gmail.com')
   AND pr.name = 'Breathwork Professional Training - 40hr';
 INSERT INTO purchases (person_id, product_id, amount_gbp, purchase_date, notes, edition, cohort_year)
-SELECT p.id, pr.id, 0.00, '2026-04-15', NULL, 'Spring', 2026
+SELECT p.id, pr.id, 430.00, '2026-04-15', NULL, 'Spring', 2026
 FROM people p, products pr
 WHERE (lower(p.email) = 'mariepreaud@yahoo.com' OR lower(p.alt_email) = 'mariepreaud@yahoo.com')
   AND pr.name = 'Breathwork Professional Training - 40hr';
@@ -3139,7 +3139,7 @@ FROM people p, products pr
 WHERE (lower(p.email) = 'isabellehughes95@gmail.com' OR lower(p.alt_email) = 'isabellehughes95@gmail.com')
   AND pr.name = 'Breathwork Professional Training - 40hr';
 INSERT INTO purchases (person_id, product_id, amount_gbp, purchase_date, notes, edition, cohort_year)
-SELECT p.id, pr.id, 0.00, '2026-10-15', NULL, 'Autumn', 2026
+SELECT p.id, pr.id, 430.00, '2026-10-15', NULL, 'Autumn', 2026
 FROM people p, products pr
 WHERE (lower(p.email) = 'sophieramsay0@gmail.com' OR lower(p.alt_email) = 'sophieramsay0@gmail.com')
   AND pr.name = 'Breathwork Professional Training - 40hr';
