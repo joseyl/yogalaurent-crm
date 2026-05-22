@@ -46,7 +46,7 @@ async function fetchDashboardData() {
   ] = await Promise.all([
     supabase.from('people').select('*', { count: 'exact', head: true }).eq('status', 'client'),
     supabase.from('leads').select('*', { count: 'exact', head: true }).in('status', ['new', 'contacted', 'quoted']),
-    supabase.from('purchases').select('amount_gbp').gte('purchase_date', firstOfMonth).lt('purchase_date', firstOfNextMonth),
+    supabase.from('purchases').select('amount_gbp, products(entity)').gte('purchase_date', firstOfMonth).lt('purchase_date', firstOfNextMonth),
     supabase.from('purchases').select('amount_gbp, products(entity)').gte('purchase_date', firstOfYear).lt('purchase_date', firstOfNextYear),
     supabase.from('leads').select('id, last_followup_date, date_added, assigned_to, people(first_name, last_name)').in('status', ['new', 'contacted', 'quoted']),
     supabase.from('attendance').select('person_id, class_date').gte('class_date', oneEightyDaysAgo),
@@ -57,7 +57,16 @@ async function fetchDashboardData() {
   ])
 
   // Summary
-  const revenueThisMonth = (monthPurchases ?? []).reduce((s, p) => s + Number(p.amount_gbp ?? 0), 0)
+  let revenueThisMonth = 0
+  let revenueThisMonthLR = 0
+  let revenueThisMonthTTL = 0
+  for (const p of monthPurchases ?? []) {
+    const amt = Number(p.amount_gbp ?? 0)
+    const prod = p.products as unknown as { entity: string } | null
+    revenueThisMonth += amt
+    if (prod?.entity === 'Laurent Roure') revenueThisMonthLR += amt
+    else if (prod?.entity === 'Terra Training Ltd') revenueThisMonthTTL += amt
+  }
   let revenueThisYear = 0
   let revenueThisYearLR = 0
   let revenueThisYearTTL = 0
@@ -132,7 +141,7 @@ async function fetchDashboardData() {
   }
 
   return {
-    summary: { activeClients: activeClients ?? 0, openLeads: openLeads ?? 0, revenueThisMonth, revenueThisYear, revenueThisYearLR, revenueThisYearTTL },
+    summary: { activeClients: activeClients ?? 0, openLeads: openLeads ?? 0, revenueThisMonth, revenueThisMonthLR, revenueThisMonthTTL, revenueThisYear, revenueThisYearLR, revenueThisYearTTL },
     staleLeads,
     goneQuiet,
     categoryRevenue,
@@ -156,9 +165,12 @@ export default async function DashboardPage() {
       <div className="grid grid-cols-2 gap-4 px-4">
         <SummaryCard label="Active Clients" value={summary.activeClients.toString()} />
         <SummaryCard label="Open Leads" value={summary.openLeads.toString()} />
-        <SummaryCard label="Revenue This Month" value={formatGBP(summary.revenueThisMonth)} />
+        <RevenueMonthCard total={summary.revenueThisMonth} lr={summary.revenueThisMonthLR} ttl={summary.revenueThisMonthTTL} />
         <RevenueYearCard total={summary.revenueThisYear} lr={summary.revenueThisYearLR} ttl={summary.revenueThisYearTTL} />
       </div>
+
+      {/* Charts */}
+      <DashboardCharts categoryRevenue={categoryRevenue} trend={trend} />
 
       {/* Alert panels */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 px-4 mt-6">
@@ -206,9 +218,6 @@ export default async function DashboardPage() {
         <ExpiringPassesPanel />
       </div>
 
-      {/* Charts */}
-      <DashboardCharts categoryRevenue={categoryRevenue} trend={trend} />
-
       {/* Quick-action buttons */}
       <div className="flex justify-center gap-3 mt-6 mb-6 px-4">
         <Link
@@ -242,6 +251,25 @@ function RevenueYearCard({ total, lr, ttl }: { total: number; lr: number; ttl: n
   return (
     <div className="bg-white border border-[#e5e7eb] rounded-sm p-5">
       <p className="uppercase tracking-wide text-xs" style={{ color: '#6b7280' }}>Revenue This Year</p>
+      <p className="font-bold mt-1" style={{ fontSize: '28px', color: '#1A2C4E' }}>{formatGBP(total)}</p>
+      <div className="mt-2 space-y-0.5">
+        <div className="flex justify-between">
+          <span className="text-xs" style={{ color: '#6b7280' }}>Laurent Roure</span>
+          <span className="text-xs font-medium" style={{ color: '#6b7280' }}>{formatGBP(lr)}</span>
+        </div>
+        <div className="flex justify-between">
+          <span className="text-xs" style={{ color: '#6b7280' }}>Terra Training Ltd</span>
+          <span className="text-xs font-medium" style={{ color: '#6b7280' }}>{formatGBP(ttl)}</span>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function RevenueMonthCard({ total, lr, ttl }: { total: number; lr: number; ttl: number }) {
+  return (
+    <div className="bg-white border border-[#e5e7eb] rounded-sm p-5">
+      <p className="uppercase tracking-wide text-xs" style={{ color: '#6b7280' }}>Revenue This Month</p>
       <p className="font-bold mt-1" style={{ fontSize: '28px', color: '#1A2C4E' }}>{formatGBP(total)}</p>
       <div className="mt-2 space-y-0.5">
         <div className="flex justify-between">
