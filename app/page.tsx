@@ -4,6 +4,8 @@ import DashboardCharts from '@/components/charts/DashboardCharts'
 import ExpiringPassesPanel from '@/components/ExpiringPassesPanel'
 import { formatGBP } from '@/lib/utils'
 
+export const dynamic = 'force-dynamic'
+
 const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
 function monthLabel(year: number, month: number): string {
