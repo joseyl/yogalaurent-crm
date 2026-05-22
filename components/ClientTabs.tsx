@@ -20,6 +20,8 @@ interface Purchase {
   notes: string | null
   product_name: string
   category: string
+  edition: string | null
+  cohort_year: number | null
 }
 
 interface Attendance {
@@ -306,6 +308,8 @@ export default function ClientTabs({ personId, purchases, attendance, leads, pro
         notes: addForm.notes || null,
         product_name: prod?.name ?? '—',
         category: prod?.category ?? 'other',
+        edition: null,
+        cohort_year: null,
       }
       setPurchaseList(prev => [newPurchase, ...prev])
       setShowAddForm(false)
@@ -431,6 +435,8 @@ export default function ClientTabs({ personId, purchases, attendance, leads, pro
         notes: refundForm.note || null,
         product_name: original.product_name,
         category: original.category,
+        edition: null,
+        cohort_year: null,
       }
       setPurchaseList(prev => [refundRow, ...prev])
       setRefundingId(null)
@@ -689,7 +695,12 @@ export default function ClientTabs({ personId, purchases, attendance, leads, pro
                           ) : (
                             <tr className="border-b border-[#f3f4f6]">
                               <td className="py-3 pr-4 text-sm text-gray-500 whitespace-nowrap">{formatDate(p.purchase_date)}</td>
-                              <td className="py-3 pr-4 text-sm font-medium" style={{ color: '#1A2C4E' }}>{p.product_name}</td>
+                              <td className="py-3 pr-4 text-sm font-medium" style={{ color: '#1A2C4E' }}>
+                                {p.product_name}
+                                {p.cohort_year != null && (
+                                  <span className="text-sm text-gray-500 ml-1">{p.edition} {p.cohort_year}</span>
+                                )}
+                              </td>
                               <td className="py-3 pr-4">
                                 <StatusBadge status={p.category} type="person" />
                               </td>
@@ -815,7 +826,12 @@ export default function ClientTabs({ personId, purchases, attendance, leads, pro
                       ) : (
                         <div className="border border-[#e5e7eb] p-3" style={{ borderRadius: 0 }}>
                           <div className="flex justify-between items-start">
-                            <p className="font-medium text-sm" style={{ color: '#1A2C4E' }}>{p.product_name}</p>
+                            <p className="font-medium text-sm" style={{ color: '#1A2C4E' }}>
+                              {p.product_name}
+                              {p.cohort_year != null && (
+                                <span className="text-sm text-gray-500 ml-1">{p.edition} {p.cohort_year}</span>
+                              )}
+                            </p>
                             <p className="font-semibold text-sm" style={{ color: p.amount_gbp < 0 ? '#ef4444' : '#B8540A' }}>{formatGBP(Number(p.amount_gbp))}</p>
                           </div>
                           <div className="flex items-center gap-2 mt-1">

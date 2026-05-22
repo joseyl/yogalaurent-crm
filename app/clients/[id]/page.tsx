@@ -20,7 +20,7 @@ export default async function ClientDetailPage({ params }: Props) {
     supabase.from('people').select('*').eq('id', id).maybeSingle(),
     supabase
       .from('purchases')
-      .select('id, product_id, amount_gbp, purchase_date, notes, products(name, category)')
+      .select('id, product_id, amount_gbp, purchase_date, notes, edition, cohort_year, products(name, category)')
       .eq('person_id', id)
       .order('purchase_date', { ascending: false }),
     supabase
@@ -53,6 +53,8 @@ export default async function ClientDetailPage({ params }: Props) {
       notes: p.notes as string | null,
       product_name: prod?.name ?? '—',
       category: prod?.category ?? 'other',
+      edition: p.edition as string | null,
+      cohort_year: p.cohort_year as number | null,
     }
   })
 

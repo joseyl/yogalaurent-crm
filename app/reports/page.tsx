@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { Fragment, useEffect, useState } from 'react'
 import Link from 'next/link'
 import StatusBadge from '@/components/StatusBadge'
 import { formatGBP, categoryLabel } from '@/lib/utils'
@@ -32,13 +32,6 @@ interface RetreatRow {
   client_count: number
 }
 
-interface TrainingRow {
-  name: string
-  cohort_year: number
-  total_revenue: number
-  client_count: number
-}
-
 interface ReportsData {
   topSpenders: Spender[]
   byCategory: {
@@ -48,8 +41,15 @@ interface ReportsData {
     workshop: CategorySpender[]
   }
   retreats: RetreatRow[]
-  trainingByCohort: TrainingRow[]
   revenueByEntity: { total: number; lr: number; ttl: number }
+}
+
+interface TrainingCohortRow {
+  product_name: string
+  edition: string | null
+  cohort_year: number | null
+  student_count: number
+  total_revenue: number
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -403,63 +403,97 @@ function RetreatsSection({ data }: { data: RetreatRow[] }) {
   )
 }
 
-// ── Section 4: Training by Cohort ─────────────────────────────────────────────
+// ── Section 4: Revenue by Training Programme (cohort breakdown) ───────────────
 
-function TrainingSection({ data }: { data: TrainingRow[] }) {
-  function exportCsv() {
-    const headers = ['Programme', 'Year', 'Clients', 'Total Revenue']
-    const rows = data.map(r => [r.name, String(r.cohort_year), String(r.client_count), formatGBP(r.total_revenue)])
-    downloadCsv([headers, ...rows], `revenue-training-${today()}.csv`)
+const TRAINING_PRODUCTS_ORDER = [
+  'Breathwork Professional Training - 60hr (Live)',
+  'Breathwork Professional Training - 60hr',
+  'Breathwork Professional Training - 40hr',
+  'Breathwork Professional Training - 100hr Bundle',
+  'Yoga Nidra Teacher Training',
+]
+
+function TrainingCohortsSection({ data }: { data: TrainingCohortRow[] }) {
+  function exportCsv(productName: string, rows: TrainingCohortRow[]) {
+    const headers = ['Cohort', 'Students', 'Revenue']
+    const csvRows = rows.map(r => [
+      r.edition && r.cohort_year != null ? `${r.edition} ${r.cohort_year}` : 'Unassigned',
+      String(r.student_count),
+      formatGBP(r.total_revenue),
+    ])
+    downloadCsv([headers, ...csvRows], `training-${productName.replace(/\s+/g, '-').toLowerCase()}-${today()}.csv`)
   }
 
   return (
     <>
-      <SectionHeading title="Revenue by Training Programme" onExport={exportCsv} />
-      {data.length === 0 ? <Empty /> : (
-        <>
-          <div className="hidden md:block">
-            <table className="w-full border-collapse">
-              <thead>
-                <tr>
-                  <th style={thStyle}>Programme</th>
-                  <th style={{ ...thStyle, textAlign: 'center' }}>Year</th>
-                  <th style={{ ...thStyle, textAlign: 'center' }}>Clients</th>
-                  <th style={{ ...thStyle, textAlign: 'right' }}>Total Revenue</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.map((r, i) => {
-                  const showName = i === 0 || data[i - 1].name !== r.name
-                  return (
-                    <tr key={`${r.name}-${r.cohort_year}`}>
-                      <td style={{ ...tdStyle, fontWeight: 500, color: '#1A2C4E', borderLeft: showName ? 'none' : '3px solid transparent' }}>
-                        {showName ? r.name : (
-                          <span style={{ color: 'transparent', userSelect: 'none' }}>—</span>
-                        )}
-                      </td>
-                      <td style={{ ...tdStyle, textAlign: 'center', color: '#6b7280' }}>{r.cohort_year}</td>
-                      <td style={{ ...tdStyle, textAlign: 'center', color: '#6b7280' }}>{r.client_count}</td>
-                      <td style={{ ...tdStyle, textAlign: 'right', fontWeight: 600 }}>{fmt(r.total_revenue)}</td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
+      <div className="flex justify-between items-center mt-8 mb-0">
+        <h2 style={{ fontSize: '18px', fontWeight: 700, color: '#1A2C4E' }}>Revenue by Training Programme</h2>
+      </div>
+      {TRAINING_PRODUCTS_ORDER.map(productName => {
+        const rows = data.filter(r => r.product_name === productName)
+
+        // Group rows by cohort_year, preserving insertion order (API already sorted)
+        const yearMap = new Map<number | null, TrainingCohortRow[]>()
+        for (const row of rows) {
+          const yr = row.cohort_year
+          if (!yearMap.has(yr)) yearMap.set(yr, [])
+          yearMap.get(yr)!.push(row)
+        }
+
+        const grandStudents = rows.reduce((s, r) => s + r.student_count, 0)
+        const grandRevenue = rows.reduce((s, r) => s + r.total_revenue, 0)
+
+        return (
+          <div key={productName}>
+            <SubHeading title={productName} onExport={() => exportCsv(productName, rows)} />
+            {rows.length === 0 ? <Empty /> : (
+              <table className="w-full border-collapse">
+                <thead>
+                  <tr>
+                    <th style={thStyle}>Cohort</th>
+                    <th style={{ ...thStyle, textAlign: 'center' }}>Students</th>
+                    <th style={{ ...thStyle, textAlign: 'right' }}>Revenue</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {Array.from(yearMap.entries()).map(([yr, cohortRows]) => {
+                    const yearStudents = cohortRows.reduce((s, r) => s + r.student_count, 0)
+                    const yearRevenue = cohortRows.reduce((s, r) => s + r.total_revenue, 0)
+                    const yearLabel = yr != null ? `${yr} Total` : 'Unassigned Total'
+                    return (
+                      <Fragment key={yr ?? 'unassigned'}>
+                        {cohortRows.map(r => {
+                          const cohortLabel =
+                            r.edition && r.cohort_year != null
+                              ? `${r.edition} ${r.cohort_year}`
+                              : 'Unassigned'
+                          return (
+                            <tr key={`${r.edition ?? ''}-${r.cohort_year ?? ''}`}>
+                              <td style={tdStyle}>{cohortLabel}</td>
+                              <td style={{ ...tdStyle, textAlign: 'center', color: '#6b7280' }}>{r.student_count}</td>
+                              <td style={{ ...tdStyle, textAlign: 'right', fontWeight: 600 }}>{fmt(r.total_revenue)}</td>
+                            </tr>
+                          )
+                        })}
+                        <tr>
+                          <td style={{ ...tdStyle, background: '#f3f4f6', fontWeight: 700, color: '#1A2C4E' }}>{yearLabel}</td>
+                          <td style={{ ...tdStyle, background: '#f3f4f6', textAlign: 'center', fontWeight: 700, color: '#1A2C4E' }}>{yearStudents}</td>
+                          <td style={{ ...tdStyle, background: '#f3f4f6', textAlign: 'right', fontWeight: 700, color: '#1A2C4E' }}>{fmt(yearRevenue)}</td>
+                        </tr>
+                      </Fragment>
+                    )
+                  })}
+                  <tr>
+                    <td style={{ padding: '10px 0', fontSize: '14px', fontWeight: 700, background: '#1A2C4E', color: 'white', borderBottom: 'none' }}>Grand Total</td>
+                    <td style={{ padding: '10px 0', fontSize: '14px', fontWeight: 700, background: '#1A2C4E', color: 'white', textAlign: 'center', borderBottom: 'none' }}>{grandStudents}</td>
+                    <td style={{ padding: '10px 0', fontSize: '14px', fontWeight: 700, background: '#1A2C4E', color: 'white', textAlign: 'right', borderBottom: 'none' }}>{fmt(grandRevenue)}</td>
+                  </tr>
+                </tbody>
+              </table>
+            )}
           </div>
-          <div className="md:hidden space-y-3">
-            {data.map(r => (
-              <div key={`${r.name}-${r.cohort_year}`} className="border border-[#e5e7eb] p-4" style={{ borderRadius: 0 }}>
-                <p className="font-semibold text-sm" style={{ color: '#1A2C4E' }}>{r.name}</p>
-                <p className="text-gray-500 text-xs mt-0.5">{r.cohort_year}</p>
-                <div className="flex justify-between items-center mt-2">
-                  <span className="text-gray-500 text-xs">{r.client_count} clients</span>
-                  <span className="font-semibold text-sm" style={{ color: '#B8540A' }}>{fmt(r.total_revenue)}</span>
-                </div>
-              </div>
-            ))}
-          </div>
-        </>
-      )}
+        )
+      })}
     </>
   )
 }
@@ -599,6 +633,9 @@ export default function ReportsPage() {
   const [interestsSummary, setInterestsSummary] = useState<InterestSummaryRow[]>([])
   const [interestsSummaryLoading, setInterestsSummaryLoading] = useState(true)
 
+  const [trainingCohorts, setTrainingCohorts] = useState<TrainingCohortRow[]>([])
+  const [trainingCohortsLoading, setTrainingCohortsLoading] = useState(true)
+
   useEffect(() => {
     let cancelled = false
     const sp = new URLSearchParams()
@@ -628,6 +665,19 @@ export default function ReportsPage() {
       })
       .catch(() => {
         if (!cancelled) setInterestsSummaryLoading(false)
+      })
+    return () => { cancelled = true }
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    fetch('/api/training-cohorts')
+      .then(r => r.json())
+      .then((d: TrainingCohortRow[]) => {
+        if (!cancelled) { setTrainingCohorts(d); setTrainingCohortsLoading(false) }
+      })
+      .catch(() => {
+        if (!cancelled) setTrainingCohortsLoading(false)
       })
     return () => { cancelled = true }
   }, [])
@@ -723,8 +773,11 @@ export default function ReportsPage() {
           <TopSpendersSection data={data.topSpenders} />
           <ByCategorySection data={data.byCategory} />
           <RetreatsSection data={data.retreats} />
-          <TrainingSection data={data.trainingByCohort} />
         </>
+      )}
+
+      {!trainingCohortsLoading && (
+        <TrainingCohortsSection data={trainingCohorts} />
       )}
 
       {!interestsSummaryLoading && (

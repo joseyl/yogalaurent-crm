@@ -28,6 +28,8 @@ interface Purchase {
   notes: string | null
   product_name: string
   category: string
+  edition: string | null
+  cohort_year: number | null
 }
 
 interface Attendance {
