@@ -300,35 +300,10 @@ export default function ClientDetail({ person: initialPerson, purchases, attenda
             </div>
             {apiError && <p className="text-red-500 text-sm mb-3">{apiError}</p>}
             <div className="flex gap-3">
-              <button
-                onClick={handleSave}
-                disabled={saving}
-                className="font-semibold text-white text-sm"
-                style={{
-                  background: saving ? '#9ca3af' : '#1A2C4E',
-                  padding: '10px 20px',
-                  minHeight: '44px',
-                  borderRadius: 0,
-                  border: 'none',
-                  cursor: saving ? 'not-allowed' : 'pointer',
-                }}
-              >
+              <button onClick={handleSave} disabled={saving} className="btn-primary">
                 {saving ? 'Saving...' : 'Save'}
               </button>
-              <button
-                onClick={cancelEdit}
-                disabled={saving}
-                className="font-medium text-sm"
-                style={{
-                  background: 'none',
-                  border: '1px solid #d1d5db',
-                  padding: '10px 20px',
-                  minHeight: '44px',
-                  borderRadius: 0,
-                  cursor: 'pointer',
-                  color: '#374151',
-                }}
-              >
+              <button onClick={cancelEdit} disabled={saving} className="btn-secondary">
                 Cancel
               </button>
             </div>
@@ -340,19 +315,7 @@ export default function ClientDetail({ person: initialPerson, purchases, attenda
                 {person.first_name} {person.last_name}
               </h1>
               <StatusBadge status={person.status} />
-              <button
-                onClick={startEdit}
-                className="flex items-center gap-1.5 text-sm"
-                style={{
-                  background: 'none',
-                  border: '1px solid #d1d5db',
-                  padding: '6px 12px',
-                  borderRadius: 0,
-                  cursor: 'pointer',
-                  color: '#374151',
-                  minHeight: '32px',
-                }}
-              >
+              <button onClick={startEdit} className="btn-secondary">
                 <Edit2 size={13} />
                 Edit
               </button>

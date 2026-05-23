@@ -222,26 +222,10 @@ export default async function DashboardPage() {
 
       {/* Quick-action buttons */}
       <div className="flex justify-center gap-3 mt-6 mb-6 px-4">
-        <Link
-          href="/clients/new"
-          className="font-semibold text-white"
-          style={{
-            background: '#B8540A',
-            padding: '12px 24px',
-            borderRadius: 0,
-          }}
-        >
+        <Link href="/clients/new" className="btn-primary">
           Add Client
         </Link>
-        <Link
-          href="/leads/new"
-          className="font-semibold text-white"
-          style={{
-            background: '#B8540A',
-            padding: '12px 24px',
-            borderRadius: 0,
-          }}
-        >
+        <Link href="/leads/new" className="btn-primary">
           Add Lead
         </Link>
       </div>

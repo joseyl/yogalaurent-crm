@@ -81,15 +81,6 @@ function exportCSV(data: Client[]) {
   URL.revokeObjectURL(url)
 }
 
-const btnBase: React.CSSProperties = {
-  border: '1px solid #d1d5db',
-  padding: '6px 14px',
-  fontSize: '14px',
-  borderRadius: 0,
-  background: 'white',
-  cursor: 'pointer',
-}
-
 export default function ClientsPage() {
   const router = useRouter()
   const [allClients, setAllClients] = useState<Client[]>([])
@@ -201,11 +192,7 @@ export default function ClientsPage() {
         <h1 className="font-bold" style={{ fontSize: '24px', color: '#1A2C4E' }}>
           Clients
         </h1>
-        <Link
-          href="/clients/new"
-          className="font-semibold text-white self-start"
-          style={{ background: '#B8540A', padding: '10px 20px', borderRadius: 0, fontSize: '14px' }}
-        >
+        <Link href="/clients/new" className="btn-primary self-start">
           Add Client
         </Link>
       </div>
@@ -401,7 +388,7 @@ export default function ClientsPage() {
           <button
             onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
             disabled={safePage <= 1}
-            style={{ ...btnBase, opacity: safePage <= 1 ? 0.4 : 1, cursor: safePage <= 1 ? 'not-allowed' : 'pointer' }}
+            className="btn-secondary"
           >
             Previous
           </button>
@@ -411,25 +398,13 @@ export default function ClientsPage() {
           <button
             onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
             disabled={safePage >= totalPages}
-            style={{ ...btnBase, opacity: safePage >= totalPages ? 0.4 : 1, cursor: safePage >= totalPages ? 'not-allowed' : 'pointer' }}
+            className="btn-secondary"
           >
             Next
           </button>
         </div>
         <div className="flex justify-end">
-          <button
-            onClick={() => exportCSV(sorted)}
-            style={{
-              border: '1px solid #1A2C4E',
-              color: '#1A2C4E',
-              background: 'white',
-              padding: '8px 16px',
-              fontSize: '14px',
-              fontWeight: 600,
-              borderRadius: 0,
-              cursor: 'pointer',
-            }}
-          >
+          <button onClick={() => exportCSV(sorted)} className="btn-secondary">
             Export CSV
           </button>
         </div>
@@ -441,7 +416,7 @@ export default function ClientsPage() {
           <button
             onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
             disabled={safePage <= 1}
-            style={{ ...btnBase, opacity: safePage <= 1 ? 0.4 : 1, cursor: safePage <= 1 ? 'not-allowed' : 'pointer' }}
+            className="btn-secondary"
           >
             Previous
           </button>
@@ -451,25 +426,12 @@ export default function ClientsPage() {
           <button
             onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
             disabled={safePage >= totalPages}
-            style={{ ...btnBase, opacity: safePage >= totalPages ? 0.4 : 1, cursor: safePage >= totalPages ? 'not-allowed' : 'pointer' }}
+            className="btn-secondary"
           >
             Next
           </button>
         </div>
-        <button
-          onClick={() => exportCSV(sorted)}
-          className="w-full"
-          style={{
-            border: '1px solid #1A2C4E',
-            color: '#1A2C4E',
-            background: 'white',
-            padding: '8px 16px',
-            fontSize: '14px',
-            fontWeight: 600,
-            borderRadius: 0,
-            cursor: 'pointer',
-          }}
-        >
+        <button onClick={() => exportCSV(sorted)} className="btn-secondary w-full">
           Export CSV
         </button>
       </div>

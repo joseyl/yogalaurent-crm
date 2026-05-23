@@ -96,7 +96,7 @@ export default function ExpiringPassesPanel() {
               </span>
               <button
                 onClick={() => dismiss(pass.id)}
-                className="text-xs text-gray-400 hover:text-gray-600 shrink-0 border border-gray-200 px-2 py-0.5"
+                className="btn-secondary shrink-0 text-xs"
               >
                 Dismiss
               </button>

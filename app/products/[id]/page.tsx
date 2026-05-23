@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { createServerClient } from '@/lib/supabase/server'
 import { formatGBP, categoryLabel } from '@/lib/utils'
 import StatusBadge from '@/components/StatusBadge'
+import ProductPurchasesList from '@/components/ProductPurchasesList'
 
 interface Props {
   params: Promise<{ id: string }>
@@ -25,7 +26,7 @@ export default async function ProductDetailPage({ params }: Props) {
     supabase.from('products').select('id, name, category').eq('id', id).single(),
     supabase
       .from('purchases')
-      .select('id, amount_gbp, purchase_date, notes, people(id, first_name, last_name)')
+      .select('id, amount_gbp, purchase_date, notes, edition, cohort_year, people(id, first_name, last_name)')
       .eq('product_id', id)
       .order('purchase_date', { ascending: false })
       .limit(10000),
@@ -53,6 +54,8 @@ export default async function ProductDetailPage({ params }: Props) {
       person_id: person?.id ?? null,
       first_name: person?.first_name ?? null,
       last_name: person?.last_name ?? null,
+      edition: p.edition as string | null,
+      cohort_year: p.cohort_year as number | null,
     }
   })
 
@@ -122,92 +125,7 @@ export default async function ProductDetailPage({ params }: Props) {
         </div>
       </div>
 
-      {purchaseList.length === 0 ? (
-        <p className="px-6 text-sm" style={{ color: '#9ca3af' }}>
-          No purchases recorded for this product
-        </p>
-      ) : (
-        <>
-          {/* Desktop table */}
-          <div className="hidden md:block px-6">
-            <table className="w-full border-collapse">
-              <thead>
-                <tr className="border-b border-[#e5e7eb]">
-                  {['Client', 'Date', 'Amount', 'Notes'].map(h => (
-                    <th
-                      key={h}
-                      className="text-left uppercase tracking-wide pb-3 pr-4"
-                      style={{ fontSize: '11px', color: '#6b7280' }}
-                    >
-                      {h}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {purchaseList.map(p => (
-                  <tr key={p.id} className="border-b border-[#f3f4f6]">
-                    <td className="py-3 pr-4 font-medium" style={{ color: '#1A2C4E' }}>
-                      {p.person_id ? (
-                        <Link href={`/clients/${p.person_id}`} className="hover:underline">
-                          {p.first_name} {p.last_name}
-                        </Link>
-                      ) : (
-                        <span style={{ color: '#9ca3af' }}>Unknown</span>
-                      )}
-                    </td>
-                    <td className="py-3 pr-4 text-sm text-gray-500 whitespace-nowrap">
-                      {formatDate(p.purchase_date)}
-                    </td>
-                    <td
-                      className="py-3 pr-4 text-sm text-right whitespace-nowrap"
-                      style={{ color: p.amount_gbp === 0 ? '#9ca3af' : undefined }}
-                    >
-                      {formatGBP(p.amount_gbp)}
-                    </td>
-                    <td className="py-3 text-sm text-gray-500">{p.notes ?? '—'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          {/* Mobile cards */}
-          <div className="md:hidden px-4">
-            {purchaseList.map(p => (
-              <div
-                key={p.id}
-                className="bg-white border border-[#e5e7eb] p-4 mb-2"
-                style={{ borderRadius: 0 }}
-              >
-                <div className="flex items-center justify-between">
-                  {p.person_id ? (
-                    <Link
-                      href={`/clients/${p.person_id}`}
-                      className="font-semibold text-sm hover:underline"
-                      style={{ color: '#1A2C4E' }}
-                    >
-                      {p.first_name} {p.last_name}
-                    </Link>
-                  ) : (
-                    <span className="font-semibold text-sm" style={{ color: '#9ca3af' }}>
-                      Unknown
-                    </span>
-                  )}
-                  <span
-                    className="font-semibold text-sm"
-                    style={{ color: p.amount_gbp === 0 ? '#9ca3af' : '#B8540A' }}
-                  >
-                    {formatGBP(p.amount_gbp)}
-                  </span>
-                </div>
-                <p className="text-gray-400 text-xs mt-1">{formatDate(p.purchase_date)}</p>
-                {p.notes && <p className="text-gray-500 text-xs mt-1">{p.notes}</p>}
-              </div>
-            ))}
-          </div>
-        </>
-      )}
+      <ProductPurchasesList purchases={purchaseList} category={product.category} />
 
       {/* ── Potential buyers ─────────────────────────────────────────────── */}
       <div className="px-6 mt-8">

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { Plus, Edit2, Archive, ArchiveRestore } from 'lucide-react'
+import { Plus, Edit2, Archive, ArchiveRestore, X } from 'lucide-react'
 import { categoryLabel } from '@/lib/utils'
 
 interface Product {
@@ -67,6 +67,7 @@ export default function ProductsPage() {
   const [editError, setEditError] = useState<string | null>(null)
 
   const [showArchived, setShowArchived] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
 
   useEffect(() => {
     let cancelled = false
@@ -83,6 +84,9 @@ export default function ProductsPage() {
 
   const active = products.filter(p => !p.archived)
   const archived = products.filter(p => p.archived)
+  const searchedActive = searchQuery.trim()
+    ? active.filter(p => p.name.toLowerCase().includes(searchQuery.toLowerCase()))
+    : active
 
   async function handleAdd() {
     if (!addForm.name.trim()) { setAddError('Name is required.'); return }
@@ -179,8 +183,7 @@ export default function ProductsPage() {
         <h1 className="font-bold" style={{ fontSize: '22px', color: '#1A2C4E' }}>Products</h1>
         <button
           onClick={() => { setShowAddForm(true); setAddError(null); setAddForm({ name: '', category: 'classes', entity: 'Laurent Roure' }) }}
-          className="flex items-center gap-2 font-semibold text-white text-sm"
-          style={{ background: '#1A2C4E', padding: '10px 16px', minHeight: '44px', borderRadius: 0, border: 'none', cursor: 'pointer' }}
+          className="btn-primary"
         >
           <Plus size={15} />
           Add Product
@@ -230,32 +233,47 @@ export default function ProductsPage() {
             </div>
             {addError && <p className="text-red-500 text-xs mb-2">{addError}</p>}
             <div className="flex gap-2">
-              <button
-                onClick={handleAdd}
-                disabled={addSaving}
-                className="font-semibold text-white text-sm"
-                style={{ background: addSaving ? '#9ca3af' : '#1A2C4E', padding: '10px 16px', minHeight: '44px', borderRadius: 0, border: 'none', cursor: addSaving ? 'not-allowed' : 'pointer' }}
-              >
+              <button onClick={handleAdd} disabled={addSaving} className="btn-primary">
                 {addSaving ? 'Saving...' : 'Add Product'}
               </button>
-              <button
-                onClick={() => { setShowAddForm(false); setAddError(null) }}
-                className="font-medium text-sm"
-                style={{ background: 'none', border: '1px solid #d1d5db', padding: '10px 16px', minHeight: '44px', borderRadius: 0, cursor: 'pointer', color: '#374151' }}
-              >
+              <button onClick={() => { setShowAddForm(false); setAddError(null) }} className="btn-secondary">
                 Cancel
               </button>
             </div>
           </div>
         )}
 
+        {/* Search */}
+        {active.length > 0 && (
+          <div className="mb-4 relative">
+            <input
+              type="text"
+              placeholder="Search products..."
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              style={{ ...inputStyle, paddingRight: searchQuery ? '40px' : '10px' }}
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#9ca3af', display: 'flex', alignItems: 'center', padding: '4px' }}
+                aria-label="Clear search"
+              >
+                <X size={14} />
+              </button>
+            )}
+          </div>
+        )}
+
         {/* Active products grouped by category */}
         {active.length === 0 && !showAddForm ? (
           <p className="text-sm text-gray-400">No products yet. Add one above.</p>
+        ) : searchedActive.length === 0 ? (
+          <p className="text-sm text-gray-400">No products found.</p>
         ) : (
           <div className="space-y-6">
             {PRODUCT_CATEGORIES.map(cat => {
-              const catProducts = active.filter(p => p.category === cat)
+              const catProducts = searchedActive.filter(p => p.category === cat)
               if (catProducts.length === 0) return null
               return (
                 <div key={cat}>
@@ -304,17 +322,10 @@ export default function ProductsPage() {
                               <td className="px-4 py-2 hidden md:table-cell"></td>
                               <td className="px-4 py-2">
                                 <div className="flex gap-2">
-                                  <button
-                                    onClick={() => handleEditSave(p.id)}
-                                    disabled={editSaving}
-                                    style={{ background: '#1A2C4E', color: 'white', border: 'none', padding: '5px 10px', fontSize: '12px', fontWeight: 600, borderRadius: 0, cursor: editSaving ? 'not-allowed' : 'pointer' }}
-                                  >
+                                  <button onClick={() => handleEditSave(p.id)} disabled={editSaving} className="btn-primary">
                                     {editSaving ? 'Saving...' : 'Save'}
                                   </button>
-                                  <button
-                                    onClick={() => setEditingId(null)}
-                                    style={{ background: 'none', color: '#374151', border: '1px solid #d1d5db', padding: '5px 10px', fontSize: '12px', borderRadius: 0, cursor: 'pointer' }}
-                                  >
+                                  <button onClick={() => setEditingId(null)} className="btn-secondary">
                                     Cancel
                                   </button>
                                 </div>
@@ -391,11 +402,7 @@ export default function ProductsPage() {
                           <span style={{ background: '#f3f4f6', color: '#374151', padding: '2px 6px', fontSize: '11px', fontWeight: 500, borderRadius: '4px' }}>{entityAbbr(p.entity)}</span>
                         </td>
                         <td className="px-4 py-3 text-right">
-                          <button
-                            onClick={() => handleArchive(p.id, false)}
-                            className="flex items-center gap-1.5 text-xs font-medium"
-                            style={{ background: 'none', border: '1px solid #d1d5db', padding: '5px 10px', borderRadius: 0, cursor: 'pointer', color: '#374151' }}
-                          >
+                          <button onClick={() => handleArchive(p.id, false)} className="btn-secondary text-xs">
                             <ArchiveRestore size={12} />
                             Unarchive
                           </button>

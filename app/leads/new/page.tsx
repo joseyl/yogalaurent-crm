@@ -253,19 +253,7 @@ export default function AddLeadPage() {
             <p className="text-red-500 text-sm mb-4">{apiError}</p>
           )}
 
-          <button
-            type="submit"
-            disabled={saving}
-            className="w-full md:w-auto font-semibold text-white"
-            style={{
-              background: saving ? '#9ca3af' : '#B8540A',
-              padding: '12px 24px',
-              fontSize: '16px',
-              borderRadius: 0,
-              border: 'none',
-              cursor: saving ? 'not-allowed' : 'pointer',
-            }}
-          >
+          <button type="submit" disabled={saving} className="btn-primary w-full md:w-auto">
             {saving ? 'Saving...' : 'Save Lead'}
           </button>
         </form>

@@ -100,17 +100,6 @@ const tdStyle: React.CSSProperties = {
   verticalAlign: 'middle',
 }
 
-const exportBtnStyle: React.CSSProperties = {
-  border: '1px solid #1A2C4E',
-  color: '#1A2C4E',
-  background: 'white',
-  padding: '6px 14px',
-  fontSize: '13px',
-  fontWeight: 600,
-  borderRadius: 0,
-  cursor: 'pointer',
-}
-
 function SectionHeading({
   title,
   onExport,
@@ -121,7 +110,7 @@ function SectionHeading({
   return (
     <div className="flex justify-between items-center mt-8 mb-4">
       <h2 style={{ fontSize: '18px', fontWeight: 700, color: '#1A2C4E' }}>{title}</h2>
-      <button onClick={onExport} style={exportBtnStyle}>Export CSV</button>
+      <button onClick={onExport} className="btn-secondary">Export CSV</button>
     </div>
   )
 }
@@ -130,7 +119,7 @@ function SubHeading({ title, onExport }: { title: string; onExport: () => void }
   return (
     <div className="flex justify-between items-center mt-5 mb-3">
       <h3 style={{ fontSize: '15px', fontWeight: 600, color: '#1A2C4E' }}>{title}</h3>
-      <button onClick={onExport} style={exportBtnStyle}>Export CSV</button>
+      <button onClick={onExport} className="btn-secondary">Export CSV</button>
     </div>
   )
 }
@@ -738,18 +727,7 @@ export default function ReportsPage() {
           />
         </div>
         {(dateFrom || dateTo) && (
-          <button
-            onClick={handleClear}
-            style={{
-              border: '1px solid #d1d5db',
-              background: 'white',
-              padding: '8px 16px',
-              fontSize: '14px',
-              borderRadius: 0,
-              cursor: 'pointer',
-              height: '40px',
-            }}
-          >
+          <button onClick={handleClear} className="btn-secondary">
             Clear
           </button>
         )}

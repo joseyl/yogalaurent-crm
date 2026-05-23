@@ -115,53 +115,6 @@ const inlineInputStyle: React.CSSProperties = {
   boxSizing: 'border-box',
 }
 
-const primaryBtnStyle: React.CSSProperties = {
-  background: '#1A2C4E',
-  color: 'white',
-  border: 'none',
-  padding: '10px 16px',
-  fontSize: '13px',
-  fontWeight: 600,
-  minHeight: '44px',
-  borderRadius: 0,
-  cursor: 'pointer',
-}
-
-const amberBtnStyle: React.CSSProperties = {
-  background: '#B8540A',
-  color: 'white',
-  border: 'none',
-  padding: '10px 16px',
-  fontSize: '13px',
-  fontWeight: 600,
-  minHeight: '44px',
-  borderRadius: 0,
-  cursor: 'pointer',
-}
-
-const destructiveBtnStyle: React.CSSProperties = {
-  background: '#B8540A',
-  color: 'white',
-  border: 'none',
-  padding: '10px 16px',
-  fontSize: '13px',
-  fontWeight: 600,
-  minHeight: '44px',
-  borderRadius: 0,
-  cursor: 'pointer',
-}
-
-const cancelBtnStyle: React.CSSProperties = {
-  background: 'none',
-  color: '#374151',
-  border: '1px solid #d1d5db',
-  padding: '10px 16px',
-  fontSize: '13px',
-  minHeight: '44px',
-  borderRadius: 0,
-  cursor: 'pointer',
-}
-
 const iconBtnStyle: React.CSSProperties = {
   background: 'none',
   border: 'none',
@@ -172,27 +125,6 @@ const iconBtnStyle: React.CSSProperties = {
   alignItems: 'center',
   justifyContent: 'center',
   borderRadius: 2,
-}
-
-const saveRowBtnStyle: React.CSSProperties = {
-  background: '#1A2C4E',
-  color: 'white',
-  border: 'none',
-  padding: '5px 10px',
-  fontSize: '12px',
-  fontWeight: 600,
-  borderRadius: 0,
-  cursor: 'pointer',
-}
-
-const cancelRowBtnStyle: React.CSSProperties = {
-  background: 'none',
-  color: '#374151',
-  border: '1px solid #d1d5db',
-  padding: '5px 10px',
-  fontSize: '12px',
-  borderRadius: 0,
-  cursor: 'pointer',
 }
 
 function ProductSelect({
@@ -608,11 +540,7 @@ export default function ClientTabs({ personId, purchases, attendance, leads, pro
           <div>
             {/* Header */}
             <div className="flex items-center justify-end mb-4">
-              <button
-                onClick={openAddForm}
-                className="flex items-center gap-1.5 font-semibold text-white text-sm"
-                style={{ background: '#1A2C4E', padding: '8px 14px', minHeight: '36px', borderRadius: 0, border: 'none', cursor: 'pointer' }}
-              >
+              <button onClick={openAddForm} className="btn-primary">
                 <Plus size={14} />
                 Add Purchase
               </button>
@@ -690,10 +618,10 @@ export default function ClientTabs({ personId, purchases, attendance, leads, pro
                 </div>
                 {addError && <p className="text-red-500 text-xs mb-2">{addError}</p>}
                 <div className="flex gap-2">
-                  <button onClick={handleAddPurchase} disabled={addSaving} style={{ ...primaryBtnStyle, opacity: addSaving ? 0.6 : 1 }}>
+                  <button onClick={handleAddPurchase} disabled={addSaving} className="btn-primary">
                     {addSaving ? 'Saving...' : 'Save Purchase'}
                   </button>
-                  <button onClick={() => { setShowAddForm(false); setAddError(null) }} style={cancelBtnStyle}>
+                  <button onClick={() => { setShowAddForm(false); setAddError(null) }} className="btn-secondary">
                     Cancel
                   </button>
                 </div>
@@ -815,10 +743,10 @@ export default function ClientTabs({ personId, purchases, attendance, leads, pro
                                   </div>
                                   {editError && <p className="text-red-500 text-xs mb-2">{editError}</p>}
                                   <div className="flex gap-2">
-                                    <button onClick={handleEditSave} disabled={editSaving} style={saveRowBtnStyle}>
+                                    <button onClick={handleEditSave} disabled={editSaving} className="btn-primary">
                                       {editSaving ? 'Saving...' : 'Save'}
                                     </button>
-                                    <button onClick={() => setEditingId(null)} style={cancelRowBtnStyle}>Cancel</button>
+                                    <button onClick={() => setEditingId(null)} className="btn-secondary">Cancel</button>
                                   </div>
                                 </div>
                               ) : (
@@ -847,7 +775,7 @@ export default function ClientTabs({ personId, purchases, attendance, leads, pro
                                       </div>
                                     )}
                                     <div className="relative group">
-                                      <button onClick={() => handleDelete(p.id)} style={{ ...iconBtnStyle, color: '#B8540A' }}>
+                                      <button onClick={() => handleDelete(p.id)} style={{ ...iconBtnStyle, color: '#DC2626' }}>
                                         <Trash2 size={13} />
                                       </button>
                                       <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-0.5 text-xs text-white rounded opacity-0 group-hover:opacity-100 transition-none whitespace-nowrap z-10" style={{ background: '#1A2C4E' }}>Delete</span>
@@ -890,11 +818,11 @@ export default function ClientTabs({ personId, purchases, attendance, leads, pro
                                       <button
                                         onClick={() => handleRefundConfirm(p)}
                                         disabled={refundSaving}
-                                        style={{ ...destructiveBtnStyle, minHeight: '36px', padding: '6px 14px', opacity: refundSaving ? 0.6 : 1 }}
+                                        className="btn-destructive"
                                       >
                                         {refundSaving ? 'Processing...' : 'Confirm Refund'}
                                       </button>
-                                      <button onClick={() => setRefundingId(null)} style={{ ...cancelBtnStyle, minHeight: '36px', padding: '6px 14px' }}>
+                                      <button onClick={() => setRefundingId(null)} className="btn-secondary">
                                         Cancel
                                       </button>
                                     </div>
@@ -909,7 +837,7 @@ export default function ClientTabs({ personId, purchases, attendance, leads, pro
                             <div className="px-3 py-3 text-center">
                               <button
                                 onClick={() => showMoreGroup(group.productName)}
-                                style={{ color: '#1A2C4E', background: 'none', border: '1px solid #d1d5db', padding: '6px 16px', borderRadius: 0, cursor: 'pointer', fontSize: '13px', fontWeight: 500 }}
+                                className="btn-secondary"
                               >
                                 Show {Math.min(PAGE_SIZE, group.purchases.length - visible)} more
                               </button>
@@ -1027,8 +955,7 @@ export default function ClientTabs({ personId, purchases, attendance, leads, pro
               <p className="font-bold" style={{ color: '#1A2C4E' }}>Interests</p>
               <button
                 onClick={openAddInterestForm}
-                className="font-semibold text-white text-sm"
-                style={{ ...amberBtnStyle, padding: '8px 14px', minHeight: '36px' }}
+                className="btn-primary"
               >
                 Add interest
               </button>
@@ -1072,11 +999,11 @@ export default function ClientTabs({ personId, purchases, attendance, leads, pro
                   <button
                     onClick={handleAddInterest}
                     disabled={addInterestSaving}
-                    style={{ ...amberBtnStyle, opacity: addInterestSaving ? 0.6 : 1 }}
+                    className="btn-primary"
                   >
                     {addInterestSaving ? 'Saving...' : 'Save'}
                   </button>
-                  <button onClick={() => { setShowAddInterestForm(false); setAddInterestError(null) }} style={cancelBtnStyle}>
+                  <button onClick={() => { setShowAddInterestForm(false); setAddInterestError(null) }} className="btn-secondary">
                     Cancel
                   </button>
                 </div>
@@ -1108,17 +1035,7 @@ export default function ClientTabs({ personId, purchases, attendance, leads, pro
                     </div>
                     <button
                       onClick={() => handleRemoveInterest(interest.id)}
-                      style={{
-                        background: 'none',
-                        border: '1px solid #d1d5db',
-                        padding: '4px 10px',
-                        borderRadius: 0,
-                        cursor: 'pointer',
-                        color: '#374151',
-                        fontSize: '12px',
-                        minHeight: '32px',
-                        flexShrink: 0,
-                      }}
+                      className="btn-secondary shrink-0"
                     >
                       Remove
                     </button>

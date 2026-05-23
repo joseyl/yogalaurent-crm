@@ -32,12 +32,12 @@ export default function Nav() {
       {/* Desktop sidebar */}
       <nav
         className="hidden md:flex fixed left-0 top-0 h-full w-[240px] flex-col z-50"
-        style={{ background: '#1A2C4E' }}
+        style={{ background: 'linear-gradient(to bottom, #1A2C4E, #2A4A7A)' }}
       >
         <div className="px-6 py-6">
-          <span className="text-white font-semibold" style={{ fontSize: '18px' }}>
-            YL CRM
-          </span>
+          <p className="text-white text-xl font-bold leading-tight">CRM</p>
+          <p className="text-white text-sm font-normal leading-snug">Laurent Roure</p>
+          <p className="text-white text-sm font-normal leading-snug">Terra Training Ltd</p>
         </div>
         <div className="flex flex-col">
           {desktopNavItems.map(item => {
@@ -47,7 +47,7 @@ export default function Nav() {
                 key={item.href}
                 href={item.href}
                 className={`flex items-center gap-3 px-4 h-12 transition-colors ${
-                  active ? 'bg-white/15 text-white' : 'text-white/70 hover:text-white hover:bg-white/10'
+                  active ? 'bg-white/20 text-white border-l-2 border-white' : 'text-white/75 hover:text-white hover:bg-white/10'
                 }`}
               >
                 <span className="flex-shrink-0">{item.icon}</span>

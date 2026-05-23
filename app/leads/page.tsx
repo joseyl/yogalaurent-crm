@@ -121,16 +121,7 @@ export default function LeadsPage() {
               : `Showing ${filtered.length} of ${allLeads.length} leads`}
           </p>
         </div>
-        <Link
-          href="/leads/new"
-          className="font-semibold text-white self-start md:self-auto"
-          style={{
-            background: '#B8540A',
-            padding: '10px 20px',
-            borderRadius: 0,
-            fontSize: '14px',
-          }}
-        >
+        <Link href="/leads/new" className="btn-primary self-start md:self-auto">
           Add Lead
         </Link>
       </div>

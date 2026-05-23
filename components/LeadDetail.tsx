@@ -237,19 +237,7 @@ export default function LeadDetail({ lead: initialLead }: Props) {
         {showConvert && (
           <div>
             <p className="uppercase tracking-wide text-xs mb-2" style={{ color: '#6b7280' }}>Actions</p>
-            <button
-              onClick={handleConvert}
-              disabled={converting}
-              className="font-semibold text-white"
-              style={{
-                background: converting ? '#9ca3af' : '#B8540A',
-                padding: '10px 20px',
-                borderRadius: 0,
-                border: 'none',
-                cursor: converting ? 'not-allowed' : 'pointer',
-                fontSize: '14px',
-              }}
-            >
+            <button onClick={handleConvert} disabled={converting} className="btn-primary">
               {converting ? 'Converting...' : 'Convert to Client'}
             </button>
           </div>
@@ -281,15 +269,7 @@ export default function LeadDetail({ lead: initialLead }: Props) {
           <button
             onClick={handleSaveNotes}
             disabled={notesState === 'saving'}
-            className="font-semibold text-white"
-            style={{
-              background: notesState === 'saving' ? '#9ca3af' : '#1A2C4E',
-              padding: '10px 20px',
-              borderRadius: 0,
-              border: 'none',
-              cursor: notesState === 'saving' ? 'not-allowed' : 'pointer',
-              fontSize: '14px',
-            }}
+            className="btn-primary"
           >
             {notesState === 'saving' ? 'Saving...' : 'Save Notes'}
           </button>
