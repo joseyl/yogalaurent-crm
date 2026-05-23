@@ -1,9 +1,9 @@
 'use client'
 
 import { useState, useEffect, Fragment } from 'react'
-import { Edit2, Trash2, RefreshCcw, Plus } from 'lucide-react'
+import { Edit2, Trash2, RefreshCcw, Plus, ChevronDown, ChevronRight } from 'lucide-react'
 import StatusBadge from '@/components/StatusBadge'
-import { formatGBP, categoryLabel } from '@/lib/utils'
+import { formatGBP } from '@/lib/utils'
 
 interface Product {
   id: string
@@ -57,6 +57,8 @@ interface PurchaseFormState {
   amount_gbp: string
   purchase_date: string
   notes: string
+  edition: string
+  cohort_year: string
 }
 
 interface Props {
@@ -74,6 +76,11 @@ function formatDate(dateStr: string | null): string {
   return date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
 }
 
+function formatMonthYear(dateStr: string): string {
+  const [y, m] = dateStr.split('-').map(Number)
+  return new Date(y, m - 1, 1).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' })
+}
+
 function todayStr(): string {
   const now = new Date()
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
@@ -82,7 +89,9 @@ function todayStr(): string {
 const TABS = ['Purchases', 'Attendance', 'Lead History', 'Interests'] as const
 type Tab = typeof TABS[number]
 
-const CATEGORIES = ['All Categories', 'classes', 'training', 'retreat', 'workshop', 'private', 'other']
+const CATEGORY_ORDER = ['training', 'retreat', 'workshop', 'private', 'classes', 'other'] as const
+const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
+const PAGE_SIZE = 20
 
 const formInputStyle: React.CSSProperties = {
   width: '100%',
@@ -213,19 +222,22 @@ function ProductSelect({
 
 export default function ClientTabs({ personId, purchases, attendance, leads, products }: Props) {
   const [activeTab, setActiveTab] = useState<Tab>('Purchases')
-  const [categoryFilter, setCategoryFilter] = useState('All Categories')
+  const [yearFilter, setYearFilter] = useState('')
+  const [monthFilter, setMonthFilter] = useState('')
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set())
+  const [groupVisible, setGroupVisible] = useState<Map<string, number>>(new Map())
 
   const [purchaseList, setPurchaseList] = useState<Purchase[]>(purchases)
 
   // Add purchase form
   const [showAddForm, setShowAddForm] = useState(false)
-  const [addForm, setAddForm] = useState<PurchaseFormState>({ product_id: '', amount_gbp: '', purchase_date: todayStr(), notes: '' })
+  const [addForm, setAddForm] = useState<PurchaseFormState>({ product_id: '', amount_gbp: '', purchase_date: todayStr(), notes: '', edition: '', cohort_year: '' })
   const [addSaving, setAddSaving] = useState(false)
   const [addError, setAddError] = useState<string | null>(null)
 
   // Edit purchase form
   const [editingId, setEditingId] = useState<string | null>(null)
-  const [editForm, setEditForm] = useState<PurchaseFormState>({ product_id: '', amount_gbp: '', purchase_date: '', notes: '' })
+  const [editForm, setEditForm] = useState<PurchaseFormState>({ product_id: '', amount_gbp: '', purchase_date: '', notes: '', edition: '', cohort_year: '' })
   const [editSaving, setEditSaving] = useState(false)
   const [editError, setEditError] = useState<string | null>(null)
 
@@ -235,7 +247,7 @@ export default function ClientTabs({ personId, purchases, attendance, leads, pro
   const [refundSaving, setRefundSaving] = useState(false)
   const [refundError, setRefundError] = useState<string | null>(null)
 
-  // Interests state — null means not yet fetched (shows loading)
+  // Interests state — null means not yet fetched
   const [interests, setInterests] = useState<Interest[] | null>(null)
   const [showAddInterestForm, setShowAddInterestForm] = useState(false)
   const [addInterestForm, setAddInterestForm] = useState({ product_id: '', source: '', notes: '' })
@@ -250,30 +262,87 @@ export default function ClientTabs({ personId, purchases, attendance, leads, pro
       .catch(() => setInterests([]))
   }, [activeTab, personId])
 
-  const totalSpend = purchaseList.reduce((s, p) => s + Number(p.amount_gbp ?? 0), 0)
+  // Product dropdown grouped in the required category order
+  const groupedProducts = CATEGORY_ORDER.reduce<Record<string, Product[]>>((acc, cat) => {
+    const items = products.filter(p => p.category === cat).sort((a, b) => a.name.localeCompare(b.name))
+    if (items.length > 0) acc[cat] = items
+    return acc
+  }, {})
 
-  const filteredPurchases = categoryFilter === 'All Categories'
-    ? purchaseList
-    : purchaseList.filter(p => p.category === categoryFilter)
+  // Year options from all purchases, descending
+  const yearOptions = Array.from(new Set(purchaseList.map(p => p.purchase_date.slice(0, 4)))).sort((a, b) => Number(b) - Number(a))
+
+  // Filtered purchases by year/month
+  const filteredPurchases = purchaseList.filter(p => {
+    if (!yearFilter) return true
+    if (p.purchase_date.slice(0, 4) !== yearFilter) return false
+    if (monthFilter && p.purchase_date.slice(5, 7) !== monthFilter) return false
+    return true
+  })
+
+  const filteredTotal = filteredPurchases.reduce((s, p) => s + Number(p.amount_gbp ?? 0), 0)
+  const filteredCount = filteredPurchases.length
+
+  function buildSummaryText(): string {
+    if (filteredCount === 0) {
+      return yearFilter || monthFilter ? 'No purchases in this period' : 'No purchases recorded'
+    }
+    const spend = formatGBP(filteredTotal)
+    const countStr = `${filteredCount} purchase${filteredCount === 1 ? '' : 's'}`
+    if (yearFilter && monthFilter) {
+      return `${spend} from ${countStr} in ${MONTH_NAMES[Number(monthFilter) - 1]} ${yearFilter}`
+    }
+    if (yearFilter) {
+      return `${spend} from ${countStr} in ${yearFilter}`
+    }
+    const sortedDates = filteredPurchases.map(p => p.purchase_date).filter(Boolean).sort()
+    if (sortedDates.length <= 1) return `${spend} from ${countStr}`
+    return `${spend} from ${countStr} · ${formatMonthYear(sortedDates[0])} – ${formatMonthYear(sortedDates[sortedDates.length - 1])}`
+  }
+
+  // Purchase groups sorted by total spend descending
+  const purchaseGroupsMap: Record<string, { productName: string; purchases: Purchase[]; total: number }> = {}
+  for (const p of filteredPurchases) {
+    const key = p.product_name
+    if (!purchaseGroupsMap[key]) purchaseGroupsMap[key] = { productName: p.product_name, purchases: [], total: 0 }
+    purchaseGroupsMap[key].purchases.push(p)
+    purchaseGroupsMap[key].total += Number(p.amount_gbp ?? 0)
+  }
+  const purchaseGroups = Object.values(purchaseGroupsMap).sort((a, b) => b.total - a.total)
+
+  // Detect if add-form selected product is training
+  const addProductCategory = addForm.product_id ? products.find(p => p.id === addForm.product_id)?.category ?? null : null
+  const isAddTraining = addProductCategory === 'training'
 
   const lastAttendance = attendance[0]?.class_date ?? null
   const attendanceCount = attendance.length
 
-  const groupedProducts = products.reduce<Record<string, Product[]>>((acc, p) => {
-    if (!acc[p.category]) acc[p.category] = []
-    acc[p.category].push(p)
-    return acc
-  }, {})
-
   function findProduct(pid: string): Product | undefined {
     return products.find(p => p.id === pid)
+  }
+
+  function toggleGroup(name: string) {
+    setExpandedGroups(prev => {
+      const next = new Set(prev)
+      if (next.has(name)) next.delete(name)
+      else next.add(name)
+      return next
+    })
+  }
+
+  function showMoreGroup(name: string) {
+    setGroupVisible(prev => {
+      const next = new Map(prev)
+      next.set(name, (next.get(name) ?? PAGE_SIZE) + PAGE_SIZE)
+      return next
+    })
   }
 
   // ── Add purchase ──────────────────────────────────────────────────────────
 
   function openAddForm() {
     setShowAddForm(true)
-    setAddForm({ product_id: '', amount_gbp: '', purchase_date: todayStr(), notes: '' })
+    setAddForm({ product_id: '', amount_gbp: '', purchase_date: todayStr(), notes: '', edition: '', cohort_year: '' })
     setAddError(null)
   }
 
@@ -286,16 +355,20 @@ export default function ClientTabs({ personId, purchases, attendance, leads, pro
     setAddSaving(true)
     setAddError(null)
     try {
+      const body: Record<string, unknown> = {
+        person_id: personId,
+        product_id: addForm.product_id,
+        amount_gbp: amt,
+        purchase_date: addForm.purchase_date,
+        notes: addForm.notes || null,
+      }
+      if (addForm.edition.trim()) body.edition = addForm.edition.trim()
+      if (addForm.cohort_year.trim()) body.cohort_year = parseInt(addForm.cohort_year, 10)
+
       const res = await fetch('/api/purchases', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          person_id: personId,
-          product_id: addForm.product_id,
-          amount_gbp: amt,
-          purchase_date: addForm.purchase_date,
-          notes: addForm.notes || null,
-        }),
+        body: JSON.stringify(body),
       })
       const data = await res.json() as { id?: string; error?: string }
       if (!res.ok) { setAddError(data.error ?? 'Failed to add.'); setAddSaving(false); return }
@@ -308,8 +381,8 @@ export default function ClientTabs({ personId, purchases, attendance, leads, pro
         notes: addForm.notes || null,
         product_name: prod?.name ?? '—',
         category: prod?.category ?? 'other',
-        edition: null,
-        cohort_year: null,
+        edition: addForm.edition.trim() || null,
+        cohort_year: addForm.cohort_year.trim() ? parseInt(addForm.cohort_year, 10) : null,
       }
       setPurchaseList(prev => [newPurchase, ...prev])
       setShowAddForm(false)
@@ -329,6 +402,8 @@ export default function ClientTabs({ personId, purchases, attendance, leads, pro
       amount_gbp: String(p.amount_gbp),
       purchase_date: p.purchase_date,
       notes: p.notes ?? '',
+      edition: '',
+      cohort_year: '',
     })
     setEditError(null)
     setRefundingId(null)
@@ -531,10 +606,8 @@ export default function ClientTabs({ personId, purchases, attendance, leads, pro
         {/* ── PURCHASES TAB ──────────────────────────────────────────────── */}
         {activeTab === 'Purchases' && (
           <div>
-            <div className="flex items-center justify-between mb-4">
-              <p className="font-bold" style={{ color: '#1A2C4E' }}>
-                Total spend: {formatGBP(totalSpend)}
-              </p>
+            {/* Header */}
+            <div className="flex items-center justify-end mb-4">
               <button
                 onClick={openAddForm}
                 className="flex items-center gap-1.5 font-semibold text-white text-sm"
@@ -554,10 +627,36 @@ export default function ClientTabs({ personId, purchases, attendance, leads, pro
                     <label className="block text-xs text-gray-500 mb-1">Product *</label>
                     <ProductSelect
                       value={addForm.product_id}
-                      onChange={v => setAddForm(f => ({ ...f, product_id: v }))}
+                      onChange={v => setAddForm(f => ({ ...f, product_id: v, edition: '', cohort_year: '' }))}
                       grouped={groupedProducts}
                     />
                   </div>
+                  {isAddTraining && (
+                    <>
+                      <div>
+                        <label className="block text-xs text-gray-500 mb-1">Edition</label>
+                        <input
+                          type="text"
+                          placeholder="e.g. Winter 2021, Spring 2025"
+                          value={addForm.edition}
+                          onChange={e => setAddForm(f => ({ ...f, edition: e.target.value }))}
+                          style={formInputStyle}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-gray-500 mb-1">Cohort Year</label>
+                        <input
+                          type="number"
+                          placeholder="e.g. 2025"
+                          min={2020}
+                          max={2030}
+                          value={addForm.cohort_year}
+                          onChange={e => setAddForm(f => ({ ...f, cohort_year: e.target.value }))}
+                          style={formInputStyle}
+                        />
+                      </div>
+                    </>
+                  )}
                   <div>
                     <label className="block text-xs text-gray-500 mb-1">Amount (GBP) *</label>
                     <input
@@ -601,287 +700,227 @@ export default function ClientTabs({ personId, purchases, attendance, leads, pro
               </div>
             )}
 
-            <div className="mb-4">
-              <select
-                value={categoryFilter}
-                onChange={e => setCategoryFilter(e.target.value)}
-                className="border border-[#d1d5db] px-3 py-2 text-sm bg-white focus:outline-none"
-                style={{ borderRadius: 0 }}
-              >
-                {CATEGORIES.map(c => (
-                  <option key={c} value={c}>
-                    {c === 'All Categories' ? 'All Categories' : categoryLabel(c)}
-                  </option>
-                ))}
-              </select>
+            {/* Summary bar */}
+            <div className="px-3 py-2.5 mb-3 border border-[#e5e7eb]" style={{ background: '#f9fafb' }}>
+              <p className="font-bold text-sm" style={{ color: '#1A2C4E' }}>{buildSummaryText()}</p>
             </div>
 
+            {/* Year / Month filters */}
+            <div className="flex gap-2 mb-4 flex-wrap">
+              <select
+                value={yearFilter}
+                onChange={e => { setYearFilter(e.target.value); setMonthFilter('') }}
+                className="border border-[#d1d5db] px-3 py-2 text-sm bg-white focus:outline-none"
+                style={{ borderRadius: 0, minHeight: '40px' }}
+              >
+                <option value="">All years</option>
+                {yearOptions.map(y => <option key={y} value={y}>{y}</option>)}
+              </select>
+              {yearFilter && (
+                <select
+                  value={monthFilter}
+                  onChange={e => setMonthFilter(e.target.value)}
+                  className="border border-[#d1d5db] px-3 py-2 text-sm bg-white focus:outline-none"
+                  style={{ borderRadius: 0, minHeight: '40px' }}
+                >
+                  <option value="">All months</option>
+                  {MONTH_NAMES.map((name, i) => (
+                    <option key={i + 1} value={String(i + 1).padStart(2, '0')}>{name}</option>
+                  ))}
+                </select>
+              )}
+            </div>
+
+            {/* Grouped purchases */}
             {filteredPurchases.length === 0 ? (
               <p className="text-gray-400 text-sm">No purchases recorded.</p>
             ) : (
-              <>
-                {/* Desktop table */}
-                <div className="hidden md:block">
-                  <table className="w-full border-collapse">
-                    <thead>
-                      <tr className="border-b border-[#e5e7eb]">
-                        {['Date', 'Product', 'Category', 'Amount', 'Notes', ''].map((h, i) => (
-                          <th
-                            key={i}
-                            className="text-left uppercase tracking-wide pb-3 pr-4 text-[11px]"
-                            style={{ color: '#6b7280' }}
-                          >
-                            {h}
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filteredPurchases.map(p => (
-                        <Fragment key={p.id}>
-                          {editingId === p.id ? (
-                            <tr className="border-b border-[#f3f4f6]">
-                              <td colSpan={6} className="py-3">
-                                <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-2">
-                                  <div className="md:col-span-1">
-                                    <label className="block text-xs text-gray-500 mb-1">Product</label>
-                                    <ProductSelect
-                                      value={editForm.product_id}
-                                      onChange={v => setEditForm(f => ({ ...f, product_id: v }))}
-                                      grouped={groupedProducts}
-                                      style={inlineInputStyle}
-                                    />
-                                  </div>
-                                  <div>
-                                    <label className="block text-xs text-gray-500 mb-1">Amount</label>
-                                    <input
-                                      type="number"
-                                      step="0.01"
-                                      value={editForm.amount_gbp}
-                                      onChange={e => setEditForm(f => ({ ...f, amount_gbp: e.target.value }))}
-                                      style={inlineInputStyle}
-                                    />
-                                  </div>
-                                  <div>
-                                    <label className="block text-xs text-gray-500 mb-1">Date</label>
-                                    <input
-                                      type="date"
-                                      value={editForm.purchase_date}
-                                      onChange={e => setEditForm(f => ({ ...f, purchase_date: e.target.value }))}
-                                      style={inlineInputStyle}
-                                    />
-                                  </div>
-                                  <div>
-                                    <label className="block text-xs text-gray-500 mb-1">Notes</label>
-                                    <input
-                                      type="text"
-                                      value={editForm.notes}
-                                      onChange={e => setEditForm(f => ({ ...f, notes: e.target.value }))}
-                                      style={inlineInputStyle}
-                                    />
-                                  </div>
-                                </div>
-                                {editError && <p className="text-red-500 text-xs mb-2">{editError}</p>}
-                                <div className="flex gap-2">
-                                  <button onClick={handleEditSave} disabled={editSaving} style={saveRowBtnStyle}>
-                                    {editSaving ? 'Saving...' : 'Save'}
-                                  </button>
-                                  <button onClick={() => setEditingId(null)} style={cancelRowBtnStyle}>
-                                    Cancel
-                                  </button>
-                                </div>
-                              </td>
-                            </tr>
-                          ) : (
-                            <tr className="border-b border-[#f3f4f6]">
-                              <td className="py-3 pr-4 text-sm text-gray-500 whitespace-nowrap">{formatDate(p.purchase_date)}</td>
-                              <td className="py-3 pr-4 text-sm font-medium" style={{ color: '#1A2C4E' }}>
-                                {p.product_name}
-                                {p.cohort_year != null && (
-                                  <span className="text-sm text-gray-500 ml-1">{p.edition} {p.cohort_year}</span>
-                                )}
-                              </td>
-                              <td className="py-3 pr-4">
-                                <StatusBadge status={p.category} type="person" />
-                              </td>
-                              <td className="py-3 pr-4 text-sm text-right whitespace-nowrap" style={{ color: p.amount_gbp < 0 ? '#ef4444' : undefined }}>
-                                {formatGBP(Number(p.amount_gbp))}
-                              </td>
-                              <td className="py-3 pr-4 text-sm text-gray-500">{p.notes ?? '—'}</td>
-                              <td className="py-3">
-                                <div className="flex items-center gap-1">
-                                  <div className="relative group">
-                                    <button onClick={() => startEditPurchase(p)} style={iconBtnStyle}>
-                                      <Edit2 size={14} />
-                                    </button>
-                                    <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-0.5 text-xs text-white rounded opacity-0 group-hover:opacity-100 transition-none whitespace-nowrap z-10" style={{ background: '#1A2C4E' }}>Edit</span>
-                                  </div>
-                                  {Number(p.amount_gbp) > 0 && (
-                                    <div className="relative group">
-                                      <button onClick={() => startRefund(p)} style={iconBtnStyle}>
-                                        <RefreshCcw size={14} />
-                                      </button>
-                                      <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-0.5 text-xs text-white rounded opacity-0 group-hover:opacity-100 transition-none whitespace-nowrap z-10" style={{ background: '#1A2C4E' }}>Issue refund</span>
-                                    </div>
-                                  )}
-                                  <div className="relative group">
-                                    <button onClick={() => handleDelete(p.id)} style={{ ...iconBtnStyle, color: '#B8540A' }}>
-                                      <Trash2 size={14} />
-                                    </button>
-                                    <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-0.5 text-xs text-white rounded opacity-0 group-hover:opacity-100 transition-none whitespace-nowrap z-10" style={{ background: '#1A2C4E' }}>Delete</span>
-                                  </div>
-                                </div>
-                              </td>
-                            </tr>
-                          )}
-                          {refundingId === p.id && (
-                            <tr className="border-b border-[#f3f4f6]">
-                              <td colSpan={6} className="py-3 pl-0">
-                                <div className="border border-[#fde68a] p-3" style={{ background: '#fffbeb' }}>
-                                  <p className="text-xs font-semibold mb-2" style={{ color: '#92400e' }}>Issue refund for {p.product_name} (max {formatGBP(p.amount_gbp)})</p>
-                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mb-2">
+              <div className="space-y-1">
+                {purchaseGroups.map(group => {
+                  const isExpanded = expandedGroups.has(group.productName)
+                  const visible = groupVisible.get(group.productName) ?? PAGE_SIZE
+                  const rows = group.purchases.slice(0, visible)
+
+                  return (
+                    <div key={group.productName}>
+                      {/* Group header */}
+                      <button
+                        onClick={() => toggleGroup(group.productName)}
+                        className="w-full flex items-center justify-between px-3 py-2.5 border border-[#e5e7eb] text-left"
+                        style={{ background: '#f9fafb', borderRadius: 0, cursor: 'pointer', border: '1px solid #e5e7eb' }}
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          {isExpanded
+                            ? <ChevronDown size={14} className="shrink-0" style={{ color: '#6b7280' }} />
+                            : <ChevronRight size={14} className="shrink-0" style={{ color: '#6b7280' }} />
+                          }
+                          <span className="font-medium text-sm truncate" style={{ color: '#1A2C4E' }}>{group.productName}</span>
+                          <span className="text-xs text-gray-400 shrink-0 whitespace-nowrap">
+                            {group.purchases.length} purchase{group.purchases.length !== 1 ? 's' : ''}
+                          </span>
+                        </div>
+                        <span
+                          className="font-semibold text-sm shrink-0 ml-3 whitespace-nowrap"
+                          style={{ color: group.total < 0 ? '#ef4444' : '#1A2C4E' }}
+                        >
+                          {formatGBP(group.total)}
+                        </span>
+                      </button>
+
+                      {/* Expanded rows */}
+                      {isExpanded && (
+                        <div className="border border-t-0 border-[#e5e7eb]">
+                          {rows.map(p => (
+                            <Fragment key={p.id}>
+                              {editingId === p.id ? (
+                                <div className="px-3 py-3 border-b border-[#f3f4f6]" style={{ background: '#f9fafb' }}>
+                                  <div className="grid grid-cols-1 md:grid-cols-4 gap-2 mb-2">
                                     <div>
-                                      <label className="block text-xs text-gray-500 mb-1">Refund Amount *</label>
+                                      <label className="block text-xs text-gray-500 mb-1">Product</label>
+                                      <ProductSelect
+                                        value={editForm.product_id}
+                                        onChange={v => setEditForm(f => ({ ...f, product_id: v }))}
+                                        grouped={groupedProducts}
+                                        style={inlineInputStyle}
+                                      />
+                                    </div>
+                                    <div>
+                                      <label className="block text-xs text-gray-500 mb-1">Amount</label>
                                       <input
                                         type="number"
-                                        min="0.01"
                                         step="0.01"
-                                        max={p.amount_gbp}
-                                        placeholder="0.00"
-                                        value={refundForm.amount}
-                                        onChange={e => setRefundForm(f => ({ ...f, amount: e.target.value }))}
+                                        value={editForm.amount_gbp}
+                                        onChange={e => setEditForm(f => ({ ...f, amount_gbp: e.target.value }))}
                                         style={inlineInputStyle}
                                       />
                                     </div>
                                     <div>
-                                      <label className="block text-xs text-gray-500 mb-1">Note</label>
+                                      <label className="block text-xs text-gray-500 mb-1">Date</label>
+                                      <input
+                                        type="date"
+                                        value={editForm.purchase_date}
+                                        onChange={e => setEditForm(f => ({ ...f, purchase_date: e.target.value }))}
+                                        style={inlineInputStyle}
+                                      />
+                                    </div>
+                                    <div>
+                                      <label className="block text-xs text-gray-500 mb-1">Notes</label>
                                       <input
                                         type="text"
-                                        value={refundForm.note}
-                                        onChange={e => setRefundForm(f => ({ ...f, note: e.target.value }))}
+                                        value={editForm.notes}
+                                        onChange={e => setEditForm(f => ({ ...f, notes: e.target.value }))}
                                         style={inlineInputStyle}
                                       />
                                     </div>
                                   </div>
-                                  {refundError && <p className="text-red-500 text-xs mb-2">{refundError}</p>}
+                                  {editError && <p className="text-red-500 text-xs mb-2">{editError}</p>}
                                   <div className="flex gap-2">
-                                    <button
-                                      onClick={() => handleRefundConfirm(p)}
-                                      disabled={refundSaving}
-                                      style={{ ...destructiveBtnStyle, minHeight: '36px', padding: '6px 14px', opacity: refundSaving ? 0.6 : 1 }}
-                                    >
-                                      {refundSaving ? 'Processing...' : 'Confirm Refund'}
+                                    <button onClick={handleEditSave} disabled={editSaving} style={saveRowBtnStyle}>
+                                      {editSaving ? 'Saving...' : 'Save'}
                                     </button>
-                                    <button onClick={() => setRefundingId(null)} style={{ ...cancelBtnStyle, minHeight: '36px', padding: '6px 14px' }}>
-                                      Cancel
-                                    </button>
+                                    <button onClick={() => setEditingId(null)} style={cancelRowBtnStyle}>Cancel</button>
                                   </div>
                                 </div>
-                              </td>
-                            </tr>
-                          )}
-                        </Fragment>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-
-                {/* Mobile cards */}
-                <div className="md:hidden space-y-3">
-                  {filteredPurchases.map(p => (
-                    <div key={p.id}>
-                      {editingId === p.id ? (
-                        <div className="border border-[#e5e7eb] p-3" style={{ background: '#f9fafb', borderRadius: 0 }}>
-                          <div className="space-y-2 mb-2">
-                            <div>
-                              <label className="block text-xs text-gray-500 mb-1">Product</label>
-                              <ProductSelect
-                                value={editForm.product_id}
-                                onChange={v => setEditForm(f => ({ ...f, product_id: v }))}
-                                grouped={groupedProducts}
-                                style={formInputStyle}
-                              />
-                            </div>
-                            <div className="grid grid-cols-2 gap-2">
-                              <div>
-                                <label className="block text-xs text-gray-500 mb-1">Amount</label>
-                                <input type="number" step="0.01" value={editForm.amount_gbp} onChange={e => setEditForm(f => ({ ...f, amount_gbp: e.target.value }))} style={formInputStyle} />
-                              </div>
-                              <div>
-                                <label className="block text-xs text-gray-500 mb-1">Date</label>
-                                <input type="date" value={editForm.purchase_date} onChange={e => setEditForm(f => ({ ...f, purchase_date: e.target.value }))} style={formInputStyle} />
-                              </div>
-                            </div>
-                            <div>
-                              <label className="block text-xs text-gray-500 mb-1">Notes</label>
-                              <input type="text" value={editForm.notes} onChange={e => setEditForm(f => ({ ...f, notes: e.target.value }))} style={formInputStyle} />
-                            </div>
-                          </div>
-                          {editError && <p className="text-red-500 text-xs mb-2">{editError}</p>}
-                          <div className="flex gap-2">
-                            <button onClick={handleEditSave} disabled={editSaving} style={saveRowBtnStyle}>{editSaving ? 'Saving...' : 'Save'}</button>
-                            <button onClick={() => setEditingId(null)} style={cancelRowBtnStyle}>Cancel</button>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="border border-[#e5e7eb] p-3" style={{ borderRadius: 0 }}>
-                          <div className="flex justify-between items-start">
-                            <p className="font-medium text-sm" style={{ color: '#1A2C4E' }}>
-                              {p.product_name}
-                              {p.cohort_year != null && (
-                                <span className="text-sm text-gray-500 ml-1">{p.edition} {p.cohort_year}</span>
+                              ) : (
+                                <div className="flex items-center gap-2 px-3 py-2.5 border-b border-[#f3f4f6]">
+                                  <span className="text-xs text-gray-500 whitespace-nowrap w-[90px] shrink-0">{formatDate(p.purchase_date)}</span>
+                                  <span
+                                    className="text-xs font-semibold w-[76px] shrink-0 text-right"
+                                    style={{ color: p.amount_gbp < 0 ? '#ef4444' : '#1A2C4E' }}
+                                  >
+                                    {formatGBP(Number(p.amount_gbp))}
+                                  </span>
+                                  <span className="text-xs text-gray-500 flex-1 min-w-0 truncate">{p.notes ?? '—'}</span>
+                                  <div className="flex items-center gap-0.5 shrink-0">
+                                    <div className="relative group">
+                                      <button onClick={() => startEditPurchase(p)} style={iconBtnStyle}>
+                                        <Edit2 size={13} />
+                                      </button>
+                                      <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-0.5 text-xs text-white rounded opacity-0 group-hover:opacity-100 transition-none whitespace-nowrap z-10" style={{ background: '#1A2C4E' }}>Edit</span>
+                                    </div>
+                                    {Number(p.amount_gbp) > 0 && (
+                                      <div className="relative group">
+                                        <button onClick={() => startRefund(p)} style={iconBtnStyle}>
+                                          <RefreshCcw size={13} />
+                                        </button>
+                                        <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-0.5 text-xs text-white rounded opacity-0 group-hover:opacity-100 transition-none whitespace-nowrap z-10" style={{ background: '#1A2C4E' }}>Issue refund</span>
+                                      </div>
+                                    )}
+                                    <div className="relative group">
+                                      <button onClick={() => handleDelete(p.id)} style={{ ...iconBtnStyle, color: '#B8540A' }}>
+                                        <Trash2 size={13} />
+                                      </button>
+                                      <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-0.5 text-xs text-white rounded opacity-0 group-hover:opacity-100 transition-none whitespace-nowrap z-10" style={{ background: '#1A2C4E' }}>Delete</span>
+                                    </div>
+                                  </div>
+                                </div>
                               )}
-                            </p>
-                            <p className="font-semibold text-sm" style={{ color: p.amount_gbp < 0 ? '#ef4444' : '#B8540A' }}>{formatGBP(Number(p.amount_gbp))}</p>
-                          </div>
-                          <div className="flex items-center gap-2 mt-1">
-                            <p className="text-gray-400 text-xs">{formatDate(p.purchase_date)}</p>
-                            <StatusBadge status={p.category} type="person" />
-                          </div>
-                          <div className="flex gap-1 mt-2">
-                            <div className="relative group">
-                              <button onClick={() => startEditPurchase(p)} style={iconBtnStyle}><Edit2 size={14} /></button>
-                              <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-0.5 text-xs text-white rounded opacity-0 group-hover:opacity-100 transition-none whitespace-nowrap z-10" style={{ background: '#1A2C4E' }}>Edit</span>
+                              {refundingId === p.id && (
+                                <div className="px-3 py-3 border-b border-[#f3f4f6]">
+                                  <div className="border border-[#fde68a] p-3" style={{ background: '#fffbeb' }}>
+                                    <p className="text-xs font-semibold mb-2" style={{ color: '#92400e' }}>
+                                      Issue refund for {p.product_name} (max {formatGBP(p.amount_gbp)})
+                                    </p>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mb-2">
+                                      <div>
+                                        <label className="block text-xs text-gray-500 mb-1">Refund Amount *</label>
+                                        <input
+                                          type="number"
+                                          min="0.01"
+                                          step="0.01"
+                                          max={p.amount_gbp}
+                                          placeholder="0.00"
+                                          value={refundForm.amount}
+                                          onChange={e => setRefundForm(f => ({ ...f, amount: e.target.value }))}
+                                          style={inlineInputStyle}
+                                        />
+                                      </div>
+                                      <div>
+                                        <label className="block text-xs text-gray-500 mb-1">Note</label>
+                                        <input
+                                          type="text"
+                                          value={refundForm.note}
+                                          onChange={e => setRefundForm(f => ({ ...f, note: e.target.value }))}
+                                          style={inlineInputStyle}
+                                        />
+                                      </div>
+                                    </div>
+                                    {refundError && <p className="text-red-500 text-xs mb-2">{refundError}</p>}
+                                    <div className="flex gap-2">
+                                      <button
+                                        onClick={() => handleRefundConfirm(p)}
+                                        disabled={refundSaving}
+                                        style={{ ...destructiveBtnStyle, minHeight: '36px', padding: '6px 14px', opacity: refundSaving ? 0.6 : 1 }}
+                                      >
+                                        {refundSaving ? 'Processing...' : 'Confirm Refund'}
+                                      </button>
+                                      <button onClick={() => setRefundingId(null)} style={{ ...cancelBtnStyle, minHeight: '36px', padding: '6px 14px' }}>
+                                        Cancel
+                                      </button>
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
+                            </Fragment>
+                          ))}
+
+                          {/* Show more */}
+                          {group.purchases.length > visible && (
+                            <div className="px-3 py-3 text-center">
+                              <button
+                                onClick={() => showMoreGroup(group.productName)}
+                                style={{ color: '#1A2C4E', background: 'none', border: '1px solid #d1d5db', padding: '6px 16px', borderRadius: 0, cursor: 'pointer', fontSize: '13px', fontWeight: 500 }}
+                              >
+                                Show {Math.min(PAGE_SIZE, group.purchases.length - visible)} more
+                              </button>
                             </div>
-                            {Number(p.amount_gbp) > 0 && (
-                              <div className="relative group">
-                                <button onClick={() => startRefund(p)} style={iconBtnStyle}><RefreshCcw size={14} /></button>
-                                <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-0.5 text-xs text-white rounded opacity-0 group-hover:opacity-100 transition-none whitespace-nowrap z-10" style={{ background: '#1A2C4E' }}>Issue refund</span>
-                              </div>
-                            )}
-                            <div className="relative group">
-                              <button onClick={() => handleDelete(p.id)} style={{ ...iconBtnStyle, color: '#B8540A' }}><Trash2 size={14} /></button>
-                              <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-0.5 text-xs text-white rounded opacity-0 group-hover:opacity-100 transition-none whitespace-nowrap z-10" style={{ background: '#1A2C4E' }}>Delete</span>
-                            </div>
-                          </div>
-                        </div>
-                      )}
-                      {refundingId === p.id && (
-                        <div className="border border-[#fde68a] p-3 mt-1" style={{ background: '#fffbeb', borderRadius: 0 }}>
-                          <p className="text-xs font-semibold mb-2" style={{ color: '#92400e' }}>Issue refund (max {formatGBP(p.amount_gbp)})</p>
-                          <div className="space-y-2 mb-2">
-                            <div>
-                              <label className="block text-xs text-gray-500 mb-1">Refund Amount *</label>
-                              <input type="number" min="0.01" step="0.01" placeholder="0.00" value={refundForm.amount} onChange={e => setRefundForm(f => ({ ...f, amount: e.target.value }))} style={formInputStyle} />
-                            </div>
-                            <div>
-                              <label className="block text-xs text-gray-500 mb-1">Note</label>
-                              <input type="text" value={refundForm.note} onChange={e => setRefundForm(f => ({ ...f, note: e.target.value }))} style={formInputStyle} />
-                            </div>
-                          </div>
-                          {refundError && <p className="text-red-500 text-xs mb-2">{refundError}</p>}
-                          <div className="flex gap-2">
-                            <button onClick={() => handleRefundConfirm(p)} disabled={refundSaving} style={{ ...destructiveBtnStyle, minHeight: '44px', opacity: refundSaving ? 0.6 : 1 }}>
-                              {refundSaving ? 'Processing...' : 'Confirm Refund'}
-                            </button>
-                            <button onClick={() => setRefundingId(null)} style={cancelBtnStyle}>Cancel</button>
-                          </div>
+                          )}
                         </div>
                       )}
                     </div>
-                  ))}
-                </div>
-              </>
+                  )
+                })}
+              </div>
             )}
           </div>
         )}
