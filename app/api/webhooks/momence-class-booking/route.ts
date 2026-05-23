@@ -24,7 +24,6 @@ export async function POST(request: NextRequest) {
   const className = payload.class_name || payload.event_name || payload.name || 'Unknown class'
   const classDate = payload.class_date || payload.event_date || payload.date || new Date().toISOString().split('T')[0]
   const passUsed = payload.membership_used || payload.pass_used || payload.membership_name || null
-  const paymentMethod = payload.payment_method || null
   const saleValue = parseFloat(payload.sale_value || '0') || 0
 
   if (!email) {
@@ -71,33 +70,74 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Attendance insert failed' }, { status: 500 })
   }
 
-  // Write purchase record for card drop-in payments
-  const isCardPayment = paymentMethod && paymentMethod.toLowerCase() === 'card'
-  if (isCardPayment && saleValue > 0) {
-    const { data: dropInProduct } = await supabaseAdmin
+  // Write purchase record for drop-in payments (sale_value > 0)
+  let purchaseCreated = false
+  let purchaseSkipReason: string | null = null
+
+  if (saleValue > 0) {
+    const { data: dropInProduct, error: productError } = await supabaseAdmin
       .from('products')
       .select('id')
       .eq('name', 'Drop-in Class')
       .single()
 
-    if (dropInProduct) {
-      const purchaseDate = classDate.split(',')[0].trim()
-      await supabaseAdmin.from('purchases').insert({
+    if (productError || !dropInProduct) {
+      await supabaseAdmin.from('webhook_log').insert({
+        source: 'momence',
+        event_type: 'class_booking',
+        payload,
+        status: 'error',
+        person_id: personId,
+        error_message: 'Product "Drop-in Class" not found — purchase not created',
+      })
+      return NextResponse.json({ error: 'Drop-in product not found' }, { status: 500 })
+    }
+
+    const purchaseDate = classDate.split('T')[0]
+
+    const { data: existingPurchase } = await supabaseAdmin
+      .from('purchases')
+      .select('id')
+      .eq('person_id', personId)
+      .eq('product_id', dropInProduct.id)
+      .eq('purchase_date', purchaseDate)
+      .maybeSingle()
+
+    if (existingPurchase) {
+      purchaseSkipReason = 'duplicate: purchase already exists for this person, product, and date'
+    } else {
+      const { error: purchaseError } = await supabaseAdmin.from('purchases').insert({
         person_id: personId,
         product_id: dropInProduct.id,
         amount_gbp: saleValue,
         purchase_date: purchaseDate,
-        notes: className,
-        expires_at: null,
-        expiry_alert_dismissed: false,
+        notes: `Drop-in payment via Momence webhook. Class: ${className}`,
       })
+
+      if (purchaseError) {
+        await supabaseAdmin.from('webhook_log').insert({
+          source: 'momence',
+          event_type: 'class_booking',
+          payload,
+          status: 'error',
+          person_id: personId,
+          error_message: `Purchase insert failed: ${purchaseError.message}`,
+        })
+        return NextResponse.json({ error: 'Purchase insert failed' }, { status: 500 })
+      }
+
+      purchaseCreated = true
     }
   }
 
   await supabaseAdmin.from('webhook_log').insert({
     source: 'momence',
     event_type: 'class_booking',
-    payload,
+    payload: {
+      ...payload,
+      _purchase_created: purchaseCreated,
+      ...(purchaseSkipReason ? { _purchase_skip_reason: purchaseSkipReason } : {}),
+    },
     status: 'success',
     person_id: personId,
   })
