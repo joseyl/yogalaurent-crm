@@ -8,7 +8,7 @@ export async function GET(request: NextRequest) {
 
   let query = supabase
     .from('products')
-    .select('id, name, category, entity, created_at, archived')
+    .select('id, name, base_name, year, category, entity, created_at, archived')
     .order('category', { ascending: true })
     .order('name', { ascending: true })
 
@@ -35,7 +35,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
   }
 
-  const { name, category, entity } = body
+  const { name, category, entity, base_name, year } = body
 
   if (!name || typeof name !== 'string' || !name.trim()) {
     return NextResponse.json({ error: 'Name is required.' }, { status: 400 })
@@ -51,7 +51,14 @@ export async function POST(request: NextRequest) {
 
   const { data, error } = await supabase
     .from('products')
-    .insert({ name: name.trim(), category, entity, archived: false })
+    .insert({
+      name: name.trim(),
+      category,
+      entity,
+      archived: false,
+      base_name: typeof base_name === 'string' ? base_name.trim() : name.trim(),
+      year: typeof year === 'number' ? year : null,
+    })
     .select('id')
     .single()
 

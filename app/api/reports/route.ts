@@ -14,6 +14,8 @@ interface ProductEmbed {
   name: string
   category: string
   entity: string
+  base_name: string | null
+  year: number | null
 }
 
 interface PurchaseRow {
@@ -44,7 +46,7 @@ export async function GET(request: NextRequest) {
 
   let query = supabase
     .from('purchases')
-    .select('id, person_id, amount_gbp, purchase_date, people!inner(id, first_name, last_name, email, status), products(id, name, category, entity)')
+    .select('id, person_id, amount_gbp, purchase_date, people!inner(id, first_name, last_name, email, status), products(id, name, category, entity, base_name, year)')
     .limit(10000)
 
   if (dateFrom) query = query.gte('purchase_date', dateFrom)
@@ -130,21 +132,39 @@ export async function GET(request: NextRequest) {
   ) as Record<Category, typeof categoryMaps.classes[string][]>
 
   // ── Query 3: Revenue per retreat product ─────────────────────────────────────
-  const retreatMap: Record<string, { name: string; total_revenue: number; persons: Set<string> }> = {}
+  const retreatMap: Record<string, { base_name: string; year: number | null; total_revenue: number; persons: Set<string> }> = {}
 
   for (const row of purchases) {
     const product = getProduct(row)
     if (!product || product.category !== 'retreat') continue
-    const name = product.name
+    const base_name = product.base_name ?? product.name
+    const year = product.year ?? null
+    const key = `${base_name}::${year ?? '__null__'}`
     const amt = Number(row.amount_gbp ?? 0)
-    if (!retreatMap[name]) retreatMap[name] = { name, total_revenue: 0, persons: new Set() }
-    retreatMap[name].total_revenue += amt
-    retreatMap[name].persons.add(row.person_id)
+    if (!retreatMap[key]) retreatMap[key] = { base_name, year, total_revenue: 0, persons: new Set() }
+    retreatMap[key].total_revenue += amt
+    retreatMap[key].persons.add(row.person_id)
   }
 
-  const retreats = Object.values(retreatMap)
-    .map(r => ({ name: r.name, total_revenue: r.total_revenue, client_count: r.persons.size }))
-    .sort((a, b) => b.total_revenue - a.total_revenue)
+  const retreatRows = Object.values(retreatMap)
+    .map(r => ({ base_name: r.base_name, year: r.year, total_revenue: r.total_revenue, client_count: r.persons.size }))
+  const maxYearByGroup: Record<string, number> = {}
+  for (const r of retreatRows) {
+    if (r.year !== null) {
+      maxYearByGroup[r.base_name] = Math.max(maxYearByGroup[r.base_name] ?? -Infinity, r.year)
+    }
+  }
+  const retreats = retreatRows.sort((a, b) => {
+    const maxA = maxYearByGroup[a.base_name] ?? -Infinity
+    const maxB = maxYearByGroup[b.base_name] ?? -Infinity
+    if (maxB !== maxA) return maxB - maxA
+    const nameOrder = a.base_name.localeCompare(b.base_name)
+    if (nameOrder !== 0) return nameOrder
+    if (a.year === b.year) return 0
+    if (a.year === null) return 1
+    if (b.year === null) return -1
+    return b.year - a.year
+  })
 
   // ── Query 4: Training by cohort year ─────────────────────────────────────────
   const trainingMap: Record<string, { name: string; cohort_year: number; total_revenue: number; persons: Set<string> }> = {}

@@ -27,7 +27,8 @@ interface CategorySpender {
 }
 
 interface RetreatRow {
-  name: string
+  base_name: string
+  year: number | null
   total_revenue: number
   client_count: number
 }
@@ -344,9 +345,41 @@ function ByCategorySection({
 // ── Section 3: Revenue by Retreat ─────────────────────────────────────────────
 
 function RetreatsSection({ data }: { data: RetreatRow[] }) {
+  // Group by base_name
+  const groupMap = new Map<string, RetreatRow[]>()
+  for (const row of data) {
+    if (!groupMap.has(row.base_name)) groupMap.set(row.base_name, [])
+    groupMap.get(row.base_name)!.push(row)
+  }
+
+  // Sort editions within each group by year desc
+  for (const rows of groupMap.values()) {
+    rows.sort((a, b) => {
+      if (a.year === b.year) return 0
+      if (a.year === null) return 1
+      if (b.year === null) return -1
+      return b.year - a.year
+    })
+  }
+
+  // Sort groups by max year desc
+  const sortedGroups = Array.from(groupMap.entries()).sort(([, aRows], [, bRows]) => {
+    const aMax = aRows.reduce<number | null>((m, r) => r.year !== null && (m === null || r.year > m) ? r.year : m, null)
+    const bMax = bRows.reduce<number | null>((m, r) => r.year !== null && (m === null || r.year > m) ? r.year : m, null)
+    if (aMax === bMax) return 0
+    if (aMax === null) return 1
+    if (bMax === null) return -1
+    return bMax - aMax
+  })
+
   function exportCsv() {
-    const headers = ['Retreat Name', 'Clients', 'Total Revenue']
-    const rows = data.map(r => [r.name, String(r.client_count), formatGBP(r.total_revenue)])
+    const headers = ['Destination', 'Year', 'Clients', 'Total Revenue']
+    const rows: string[][] = []
+    for (const [baseName, editions] of sortedGroups) {
+      for (const r of editions) {
+        rows.push([baseName, r.year != null ? String(r.year) : '', String(r.client_count), formatGBP(r.total_revenue)])
+      }
+    }
     downloadCsv([headers, ...rows], `revenue-retreats-${today()}.csv`)
   }
 
@@ -355,36 +388,89 @@ function RetreatsSection({ data }: { data: RetreatRow[] }) {
       <SectionHeading title="Revenue by Retreat" onExport={exportCsv} />
       {data.length === 0 ? <Empty /> : (
         <>
+          {/* Desktop table */}
           <div className="hidden md:block">
             <table className="w-full border-collapse">
               <thead>
                 <tr>
-                  <th style={thStyle}>Retreat Name</th>
+                  <th style={thStyle}>Retreat</th>
                   <th style={{ ...thStyle, textAlign: 'center' }}>Clients</th>
                   <th style={{ ...thStyle, textAlign: 'right' }}>Total Revenue</th>
                 </tr>
               </thead>
               <tbody>
-                {data.map(r => (
-                  <tr key={r.name}>
-                    <td style={{ ...tdStyle, fontWeight: 500, color: '#1A2C4E' }}>{r.name}</td>
-                    <td style={{ ...tdStyle, textAlign: 'center', color: '#6b7280' }}>{r.client_count}</td>
-                    <td style={{ ...tdStyle, textAlign: 'right', fontWeight: 600 }}>{fmt(r.total_revenue)}</td>
-                  </tr>
-                ))}
+                {sortedGroups.map(([baseName, editions]) => {
+                  if (editions.length === 1) {
+                    const r = editions[0]
+                    const label = r.year != null ? `${baseName} ${r.year}` : baseName
+                    return (
+                      <tr key={baseName}>
+                        <td style={{ ...tdStyle, fontWeight: 500, color: '#1A2C4E' }}>{label}</td>
+                        <td style={{ ...tdStyle, textAlign: 'center', color: '#6b7280' }}>{r.client_count}</td>
+                        <td style={{ ...tdStyle, textAlign: 'right', fontWeight: 600 }}>{fmt(r.total_revenue)}</td>
+                      </tr>
+                    )
+                  }
+                  const groupClients = editions.reduce((s, r) => s + r.client_count, 0)
+                  const groupRevenue = editions.reduce((s, r) => s + r.total_revenue, 0)
+                  return (
+                    <Fragment key={baseName}>
+                      <tr style={{ background: '#f9fafb' }}>
+                        <td colSpan={3} style={{ ...tdStyle, fontWeight: 700, color: '#1A2C4E', fontSize: '13px' }}>{baseName}</td>
+                      </tr>
+                      {editions.map(r => (
+                        <tr key={`${baseName}-${r.year}`}>
+                          <td style={{ ...tdStyle, paddingLeft: '24px', color: '#374151' }}>{r.year ?? '—'}</td>
+                          <td style={{ ...tdStyle, textAlign: 'center', color: '#6b7280' }}>{r.client_count}</td>
+                          <td style={{ ...tdStyle, textAlign: 'right', fontWeight: 600 }}>{fmt(r.total_revenue)}</td>
+                        </tr>
+                      ))}
+                      <tr>
+                        <td style={{ ...tdStyle, background: '#f3f4f6', fontWeight: 700, color: '#1A2C4E' }}>Total</td>
+                        <td style={{ ...tdStyle, background: '#f3f4f6', textAlign: 'center', fontWeight: 700, color: '#1A2C4E' }}>{groupClients}</td>
+                        <td style={{ ...tdStyle, background: '#f3f4f6', textAlign: 'right', fontWeight: 700, color: '#1A2C4E' }}>{fmt(groupRevenue)}</td>
+                      </tr>
+                    </Fragment>
+                  )
+                })}
               </tbody>
             </table>
           </div>
+          {/* Mobile cards */}
           <div className="md:hidden space-y-3">
-            {data.map(r => (
-              <div key={r.name} className="border border-[#e5e7eb] p-4" style={{ borderRadius: 0 }}>
-                <p className="font-semibold text-sm" style={{ color: '#1A2C4E' }}>{r.name}</p>
-                <div className="flex justify-between items-center mt-2">
-                  <span className="text-gray-500 text-xs">{r.client_count} clients</span>
-                  <span className="font-semibold text-sm" style={{ color: '#B8540A' }}>{fmt(r.total_revenue)}</span>
+            {sortedGroups.map(([baseName, editions]) => {
+              if (editions.length === 1) {
+                const r = editions[0]
+                const label = r.year != null ? `${baseName} ${r.year}` : baseName
+                return (
+                  <div key={baseName} className="border border-[#e5e7eb] p-4" style={{ borderRadius: 0 }}>
+                    <p className="font-semibold text-sm" style={{ color: '#1A2C4E' }}>{label}</p>
+                    <div className="flex justify-between items-center mt-2">
+                      <span className="text-gray-500 text-xs">{r.client_count} clients</span>
+                      <span className="font-semibold text-sm" style={{ color: '#B8540A' }}>{fmt(r.total_revenue)}</span>
+                    </div>
+                  </div>
+                )
+              }
+              const groupRevenue = editions.reduce((s, r) => s + r.total_revenue, 0)
+              return (
+                <div key={baseName} className="border border-[#e5e7eb]" style={{ borderRadius: 0 }}>
+                  <div className="px-4 py-2" style={{ background: '#f9fafb', borderBottom: '1px solid #e5e7eb' }}>
+                    <p className="font-bold text-sm" style={{ color: '#1A2C4E' }}>{baseName}</p>
+                    <p className="text-xs text-gray-500 mt-0.5">{fmt(groupRevenue)} total</p>
+                  </div>
+                  {editions.map(r => (
+                    <div key={`${baseName}-${r.year}`} className="flex justify-between items-center px-4 py-2 border-b border-[#f3f4f6] last:border-0">
+                      <span className="text-sm text-gray-600">{r.year ?? '—'}</span>
+                      <div className="flex gap-3 items-center">
+                        <span className="text-xs text-gray-400">{r.client_count} clients</span>
+                        <span className="text-sm font-semibold" style={{ color: '#B8540A' }}>{fmt(r.total_revenue)}</span>
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         </>
       )}
