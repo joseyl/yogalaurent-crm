@@ -9,6 +9,7 @@ export async function GET() {
       supabase
         .from('people')
         .select('id, first_name, last_name, email, alt_email, phone, country, status, assigned_to, source_channel')
+        .eq('status', 'client')
         .order('last_name', { ascending: true })
         .order('first_name', { ascending: true }),
       supabase
