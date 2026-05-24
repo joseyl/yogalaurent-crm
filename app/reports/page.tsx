@@ -3,6 +3,7 @@
 import { Fragment, useEffect, useState } from 'react'
 import Link from 'next/link'
 import StatusBadge from '@/components/StatusBadge'
+import LoadingSpinner from '@/app/components/LoadingSpinner'
 import { formatGBP, categoryLabel } from '@/lib/utils'
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -783,6 +784,10 @@ export default function ReportsPage() {
     borderRadius: 0,
     height: '40px',
     outline: 'none',
+  }
+
+  if (loading) {
+    return <LoadingSpinner message="Loading reports..." />
   }
 
   return (

@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import StatusBadge from '@/components/StatusBadge'
+import LoadingSpinner from '@/app/components/LoadingSpinner'
 import { formatGBP } from '@/lib/utils'
 
 interface Client {
@@ -168,11 +169,7 @@ export default function ClientsPage() {
   const paginated = sorted.slice((safePage - 1) * pageSize, safePage * pageSize)
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[40vh]">
-        <p className="text-gray-500">Loading clients...</p>
-      </div>
-    )
+    return <LoadingSpinner message="Loading clients..." />
   }
 
   if (error) {

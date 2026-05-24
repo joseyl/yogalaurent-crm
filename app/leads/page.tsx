@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import StatusBadge from '@/components/StatusBadge'
+import LoadingSpinner from '@/app/components/LoadingSpinner'
 
 interface Lead {
   id: string
@@ -92,11 +93,7 @@ export default function LeadsPage() {
   })
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[40vh]">
-        <p className="text-gray-500">Loading leads...</p>
-      </div>
-    )
+    return <LoadingSpinner message="Loading leads..." />
   }
 
   if (error) {
