@@ -4,6 +4,7 @@ import { Fragment, useState, useEffect } from 'react'
 import Link from 'next/link'
 import { Plus, Edit2, Archive, ArchiveRestore, X } from 'lucide-react'
 import { categoryLabel } from '@/lib/utils'
+import LoadingSpinner from '@/app/components/LoadingSpinner'
 
 interface Product {
   id: string
@@ -276,7 +277,7 @@ export default function ProductsPage() {
   }
 
   if (loading) {
-    return <div className="px-6 pt-6 text-sm text-gray-500">Loading...</div>
+    return <LoadingSpinner message="Loading products..." />
   }
 
   if (fetchError) {
