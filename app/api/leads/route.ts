@@ -19,6 +19,7 @@ export async function GET() {
     )
     .order('last_followup_date', { ascending: true, nullsFirst: true })
     .order('date_added', { ascending: true })
+    .limit(10000)
 
   if (error) {
     return NextResponse.json({ error: 'Failed to fetch leads' }, { status: 500 })
