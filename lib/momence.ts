@@ -48,6 +48,13 @@ export const MOMENCE_MEMBERSHIP_LOOKUP: Record<string, MomenceMembership> = {
     notes: '3 sessions',
     expiryDays: null,
   },
+  // Momence re-created the 3-session private pack under a new id. Both are live.
+  '137069': {
+    productName: 'Private Class Pack',
+    amountGbp: 180,
+    notes: '3 sessions',
+    expiryDays: null,
+  },
   '330739': {
     productName: '10 Class Pass',
     amountGbp: 90,

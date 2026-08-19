@@ -87,6 +87,29 @@ export async function POST(request: NextRequest) {
         .split('T')[0]
     : null
 
+  // Do not write the same purchase twice. Momence and Zapier both retry, and a
+  // Zap being switched back on can replay recent items. The class booking route
+  // has had this guard since May; this one did not.
+  const { data: existingPurchase } = await supabaseAdmin
+    .from('purchases')
+    .select('id')
+    .eq('person_id', personId)
+    .eq('product_id', product.id)
+    .eq('purchase_date', parsedDate)
+    .maybeSingle()
+
+  if (existingPurchase) {
+    await supabaseAdmin.from('webhook_log').insert({
+      source: 'momence',
+      event_type: 'membership_purchase',
+      payload,
+      status: 'skipped',
+      person_id: personId,
+      error_message: `Duplicate: a ${membership.productName} purchase already exists for this person on ${parsedDate}`,
+    })
+    return NextResponse.json({ ok: true, note: 'Already recorded' })
+  }
+
   const { error: purchaseError } = await supabaseAdmin.from('purchases').insert({
     person_id: personId,
     product_id: product.id,
