@@ -5,6 +5,9 @@ interface PersonData {
   firstName?: string
   lastName?: string
   phone?: string
+  /** Where this person came from. Defaults to Momence so existing callers are unchanged. */
+  sourceChannel?: string
+  country?: string
 }
 
 export async function findOrCreatePerson(data: PersonData): Promise<string | null> {
@@ -33,9 +36,10 @@ export async function findOrCreatePerson(data: PersonData): Promise<string | nul
       first_name: data.firstName || null,
       last_name: data.lastName || null,
       phone: data.phone || null,
+      country: data.country || null,
       status: 'client',
       assigned_to: 'Jose',
-      source_channel: 'Momence',
+      source_channel: data.sourceChannel || 'Momence',
     })
     .select('id')
     .single()

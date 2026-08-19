@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { createServerClient } from '@/lib/supabase/server'
 import DashboardCharts from '@/components/charts/DashboardCharts'
 import ExpiringPassesPanel from '@/components/ExpiringPassesPanel'
+import AwaitingPaymentPanel from '@/components/AwaitingPaymentPanel'
 import { formatGBP } from '@/lib/utils'
 
 export const dynamic = 'force-dynamic'
@@ -216,6 +217,8 @@ export default async function DashboardPage() {
             ))
           )}
         </AlertPanel>
+
+        <AwaitingPaymentPanel />
 
         <ExpiringPassesPanel />
       </div>

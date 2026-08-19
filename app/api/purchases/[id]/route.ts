@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase/server'
 
-const ALLOWED_FIELDS = ['product_id', 'amount_gbp', 'purchase_date', 'notes'] as const
+const ALLOWED_FIELDS = ['product_id', 'amount_gbp', 'purchase_date', 'notes', 'amount_paid_gbp', 'payment_option', 'balance_due_date'] as const
 type AllowedField = typeof ALLOWED_FIELDS[number]
 
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {

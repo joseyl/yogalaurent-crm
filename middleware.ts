@@ -4,6 +4,7 @@ const isPublicRoute = createRouteMatcher([
   "/sign-in(.*)",
   "/api/webhooks/momence-class-booking",
   "/api/webhooks/momence-membership-purchase",
+  "/api/webhooks/training-order",
 ]);
 
 export default clerkMiddleware(async (auth, request) => {
