@@ -18,6 +18,19 @@ function daysAgo(n: number): string {
   return new Date(Date.now() - n * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
 }
 
+function formatUKDateTime(isoString: string | null | undefined): string {
+  if (!isoString) return 'never'
+  return new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Europe/London',
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).format(new Date(isoString))
+}
+
 function daysSince(dateStr: string | null): number {
   if (!dateStr) return 999
   return Math.floor((Date.now() - new Date(dateStr).getTime()) / (1000 * 60 * 60 * 24))
@@ -47,6 +60,7 @@ async function fetchDashboardData() {
     { data: chartMonthPurchases },
     { data: clientsData },
     { data: leadsData },
+    { data: latestSync },
   ] = await Promise.all([
     supabase.from('people').select('*', { count: 'exact', head: true }).eq('status', 'client'),
     supabase.from('leads').select('*', { count: 'exact', head: true }).in('status', ['new', 'contacted', 'quoted']),
@@ -66,6 +80,7 @@ async function fetchDashboardData() {
     supabase.from('purchases').select('amount_gbp, products(category)').gte('purchase_date', firstOfMonth).lt('purchase_date', firstOfNextMonth),
     supabase.from('people').select('created_at').eq('status', 'client').gte('created_at', elevenMonthsAgo),
     supabase.from('leads').select('date_added').gte('date_added', elevenMonthsAgo),
+    supabase.from('sync_runs').select('status,finished_at,error,created_at').order('id', { ascending: false }).limit(1).maybeSingle(),
   ])
 
   // Summary
@@ -158,11 +173,12 @@ async function fetchDashboardData() {
     goneQuiet,
     categoryRevenue,
     trend,
+    latestSync: latestSync as { status: string; finished_at: string | null; error: string | null; created_at: string } | null,
   }
 }
 
 export default async function DashboardPage() {
-  const { summary, staleLeads, goneQuiet, categoryRevenue, trend } = await fetchDashboardData()
+  const { summary, staleLeads, goneQuiet, categoryRevenue, trend, latestSync } = await fetchDashboardData()
 
   return (
     <div className="pb-24">
@@ -233,7 +249,7 @@ export default async function DashboardPage() {
       </div>
 
       {/* Quick-action buttons */}
-      <div className="flex justify-center gap-3 mt-6 mb-6 px-4">
+      <div className="flex justify-center gap-3 mt-6 mb-4 px-4">
         <Link href="/clients/new" className="btn-primary">
           Add Client
         </Link>
@@ -241,6 +257,19 @@ export default async function DashboardPage() {
           Add Lead
         </Link>
       </div>
+
+      {/* Momence sync status */}
+      <p className="text-xs text-center px-4 pb-4" style={{ color: '#9ca3af' }}>
+        {latestSync
+          ? <>
+              Momence copy: last run{' '}
+              {formatUKDateTime(latestSync.finished_at ?? latestSync.created_at)},{' '}
+              {latestSync.status === 'success' ? 'Success' : 'Failed'}
+              {latestSync.status === 'failed' && latestSync.error && ` — ${latestSync.error}`}
+            </>
+          : 'Momence copy: no sync yet'
+        }
+      </p>
     </div>
   )
 }
