@@ -4,6 +4,7 @@ import DashboardCharts from '@/components/charts/DashboardCharts'
 import ExpiringPassesPanel from '@/components/ExpiringPassesPanel'
 import AwaitingPaymentPanel from '@/components/AwaitingPaymentPanel'
 import { formatGBP } from '@/lib/utils'
+import { fetchAll } from '@/lib/fetchAll'
 
 export const dynamic = 'force-dynamic'
 
@@ -41,7 +42,7 @@ async function fetchDashboardData() {
     { data: monthPurchases },
     { data: yearPurchases },
     { data: openLeadsData },
-    { data: attendance180 },
+    attendance180,
     { data: clients },
     { data: chartMonthPurchases },
     { data: clientsData },
@@ -52,7 +53,15 @@ async function fetchDashboardData() {
     supabase.from('purchases').select('amount_gbp, products(entity)').gte('purchase_date', firstOfMonth).lt('purchase_date', firstOfNextMonth),
     supabase.from('purchases').select('amount_gbp, products(entity)').gte('purchase_date', firstOfYear).lt('purchase_date', firstOfNextYear),
     supabase.from('leads').select('id, last_followup_date, date_added, assigned_to, people(first_name, last_name)').in('status', ['new', 'contacted', 'quoted']),
-    supabase.from('attendance').select('person_id, class_date').gte('class_date', oneEightyDaysAgo),
+    fetchAll<{ person_id: string; class_date: string }>(
+      () => supabase
+        .from('attendance_v2')
+        .select('person_id, class_date')
+        .gte('class_date', oneEightyDaysAgo)
+        .eq('cancelled', false)
+        .eq('duplicate_of_momence', false)
+        .not('person_id', 'is', null)
+    ),
     supabase.from('people').select('id, first_name, last_name').eq('status', 'client'),
     supabase.from('purchases').select('amount_gbp, products(category)').gte('purchase_date', firstOfMonth).lt('purchase_date', firstOfNextMonth),
     supabase.from('people').select('created_at').eq('status', 'client').gte('created_at', elevenMonthsAgo),
@@ -97,7 +106,7 @@ async function fetchDashboardData() {
 
   // Gone quiet
   const byPerson: Record<string, { recent: number; older: number }> = {}
-  for (const a of attendance180 ?? []) {
+  for (const a of attendance180) {
     if (!byPerson[a.person_id]) byPerson[a.person_id] = { recent: 0, older: 0 }
     if (a.class_date >= twentyEightDaysAgo) {
       byPerson[a.person_id].recent++

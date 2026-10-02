@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation'
 import { createServerClient } from '@/lib/supabase/server'
 import ClientDetail from '@/components/ClientDetail'
+import { fetchAll } from '@/lib/fetchAll'
 
 interface Props {
   params: Promise<{ id: string }>
@@ -13,7 +14,7 @@ export default async function ClientDetailPage({ params }: Props) {
   const [
     { data: person },
     { data: purchases },
-    { data: attendance },
+    attendance,
     { data: leads },
     { data: products },
   ] = await Promise.all([
@@ -23,11 +24,15 @@ export default async function ClientDetailPage({ params }: Props) {
       .select('id, product_id, amount_gbp, purchase_date, notes, edition, cohort_year, products(name, category)')
       .eq('person_id', id)
       .order('purchase_date', { ascending: false }),
-    supabase
-      .from('attendance')
-      .select('id, class_name, class_date, pass_used')
-      .eq('person_id', id)
-      .order('class_date', { ascending: false }),
+    fetchAll<{ id: string; class_name: string; class_date: string; pass_used: string | null }>(
+      () => supabase
+        .from('attendance_v2')
+        .select('id, class_name, class_date, pass_used')
+        .eq('person_id', id)
+        .eq('cancelled', false)
+        .eq('duplicate_of_momence', false)
+        .order('class_date', { ascending: false })
+    ),
     supabase
       .from('leads')
       .select('id, status, date_added, last_followup_date, notes, assigned_to, products(name)')
@@ -58,7 +63,7 @@ export default async function ClientDetailPage({ params }: Props) {
     }
   })
 
-  const attendanceData = (attendance ?? []).map(a => ({
+  const attendanceData = attendance.map(a => ({
     id: a.id,
     class_name: a.class_name as string,
     class_date: a.class_date as string,
