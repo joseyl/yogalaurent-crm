@@ -87,8 +87,8 @@ export default function ProductPurchasesList({ purchases, category }: Props) {
           <select
             value={cohortFilter}
             onChange={e => setCohortFilter(e.target.value)}
-            className="border border-[#d1d5db] bg-white text-sm focus:outline-none"
-            style={{ borderRadius: 0, minHeight: '44px', padding: '8px 10px', minWidth: '200px', maxWidth: '100%' }}
+            className="border border-card-border text-sm focus:outline-none"
+            style={{ minHeight: '44px', paddingTop: '8px', paddingBottom: '8px', paddingLeft: '12px', minWidth: '200px', maxWidth: '100%' }}
           >
             <option value="">All cohorts</option>
             {cohortOptions.map(opt => (
@@ -99,7 +99,7 @@ export default function ProductPurchasesList({ purchases, category }: Props) {
       )}
 
       <div className="px-6 mb-3">
-        <p className="text-sm font-semibold" style={{ color: '#1A2C4E' }}>
+        <p className="text-sm font-semibold text-heading">
           {enrolledCount} {noun} — {formatGBP(filteredRevenue)}
         </p>
       </div>
@@ -112,12 +112,12 @@ export default function ProductPurchasesList({ purchases, category }: Props) {
           <div className="hidden md:block px-6">
             <table className="w-full border-collapse">
               <thead>
-                <tr className="border-b border-[#e5e7eb]">
+                <tr className="bg-grey-subtle border-b border-card-border">
                   {['Client', 'Date', 'Amount', 'Notes'].map(h => (
                     <th
                       key={h}
-                      className="text-left uppercase tracking-wide pb-3 pr-4"
-                      style={{ fontSize: '11px', color: '#6b7280' }}
+                      className="text-left uppercase tracking-wide pb-3 pr-4 text-muted"
+                      style={{ fontSize: '11px' }}
                     >
                       {h}
                     </th>
@@ -126,8 +126,8 @@ export default function ProductPurchasesList({ purchases, category }: Props) {
               </thead>
               <tbody>
                 {filteredPurchases.map(p => (
-                  <tr key={p.id} className="border-b border-[#f3f4f6]">
-                    <td className="py-3 pr-4 font-medium" style={{ color: '#1A2C4E' }}>
+                  <tr key={p.id} className="border-b border-card-border hover:bg-grey-subtle">
+                    <td className="py-3 pr-4 font-medium text-heading">
                       {p.person_id ? (
                         <Link href={`/clients/${p.person_id}`} className="hover:underline">
                           {p.first_name} {p.last_name}
@@ -157,15 +157,13 @@ export default function ProductPurchasesList({ purchases, category }: Props) {
             {filteredPurchases.map(p => (
               <div
                 key={p.id}
-                className="bg-white border border-[#e5e7eb] p-4 mb-2"
-                style={{ borderRadius: 0 }}
+                className="card p-4 mb-2"
               >
                 <div className="flex items-center justify-between">
                   {p.person_id ? (
                     <Link
                       href={`/clients/${p.person_id}`}
-                      className="font-semibold text-sm hover:underline"
-                      style={{ color: '#1A2C4E' }}
+                      className="font-semibold text-sm hover:underline text-heading"
                     >
                       {p.first_name} {p.last_name}
                     </Link>
@@ -174,7 +172,7 @@ export default function ProductPurchasesList({ purchases, category }: Props) {
                   )}
                   <span
                     className="font-semibold text-sm"
-                    style={{ color: p.amount_gbp === 0 ? '#9ca3af' : '#B8540A' }}
+                    style={{ color: p.amount_gbp === 0 ? '#9ca3af' : 'var(--accent)' }}
                   >
                     {formatGBP(p.amount_gbp)}
                   </span>
