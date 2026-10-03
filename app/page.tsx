@@ -39,18 +39,35 @@ function daysSince(dateStr: string | null): number {
   return Math.floor((Date.now() - new Date(dateStr).getTime()) / (1000 * 60 * 60 * 24))
 }
 
+// Returns the current year and month (0-indexed) as seen in the Europe/London timezone.
+// Using Intl.DateTimeFormat avoids any dependency on the machine's local timezone.
+function londonYearMonth(date: Date): { year: number; month: number } {
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Europe/London',
+    year: 'numeric',
+    month: '2-digit',
+  }).formatToParts(date)
+  const year = Number(parts.find(p => p.type === 'year')!.value)
+  const month = Number(parts.find(p => p.type === 'month')!.value) - 1 // convert to 0-indexed
+  return { year, month }
+}
+
 async function fetchDashboardData() {
   const supabase = createServerClient()
   const now = new Date()
 
-  const firstOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0]
-  const firstOfNextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1).toISOString().split('T')[0]
-  const firstOfYear = `${now.getFullYear()}-01-01`
-  const firstOfNextYear = `${now.getFullYear() + 1}-01-01`
+  // Build all date boundaries from the London calendar date so they are
+  // identical whether the server runs in UTC or BST.
+  // Date.UTC handles month overflow (e.g. month 12 or month -2) correctly.
+  const { year: londonYear, month: londonMonth } = londonYearMonth(now)
+  const firstOfMonth    = new Date(Date.UTC(londonYear, londonMonth,      1)).toISOString().split('T')[0]
+  const firstOfNextMonth = new Date(Date.UTC(londonYear, londonMonth + 1,  1)).toISOString().split('T')[0]
+  const firstOfYear     = new Date(Date.UTC(londonYear, 0,                1)).toISOString().split('T')[0]
+  const firstOfNextYear = new Date(Date.UTC(londonYear + 1, 0,            1)).toISOString().split('T')[0]
   const sevenDaysAgo = daysAgo(7)
   const twentyEightDaysAgo = daysAgo(28)
   const oneEightyDaysAgo = daysAgo(180)
-  const elevenMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 11, 1).toISOString().split('T')[0]
+  const elevenMonthsAgo = new Date(Date.UTC(londonYear, londonMonth - 11,  1)).toISOString().split('T')[0]
 
   const [
     { count: activeClients },
