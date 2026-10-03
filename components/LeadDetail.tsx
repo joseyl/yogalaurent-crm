@@ -4,6 +4,8 @@ import { useState, useRef } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import StatusBadge from '@/components/StatusBadge'
+import PageHeader from '@/components/ui/PageHeader'
+import Card from '@/components/ui/Card'
 
 interface LeadData {
   id: string
@@ -45,11 +47,8 @@ function Field({ label, value, stale }: { label: string; value: string | null | 
   const display = value || '—'
   return (
     <div>
-      <p className="uppercase tracking-wide text-xs mb-1" style={{ color: '#6b7280' }}>{label}</p>
-      <p
-        className="font-medium text-sm"
-        style={{ color: stale ? '#dc2626' : '#1A2C4E', fontWeight: stale ? 700 : 500 }}
-      >
+      <p className="uppercase tracking-wide text-xs mb-1 text-muted">{label}</p>
+      <p className={`text-sm ${stale ? 'font-bold text-red-vivid' : 'font-medium text-heading'}`}>
         {display}
       </p>
     </div>
@@ -145,136 +144,137 @@ export default function LeadDetail({ lead: initialLead }: Props) {
   }
 
   const selectStyle: React.CSSProperties = {
-    border: '1px solid #d1d5db',
-    padding: '8px 10px',
+    border: '1px solid #E4E7EC',
+    paddingTop: '8px',
+    paddingBottom: '8px',
+    paddingLeft: '10px',
     fontSize: '14px',
-    borderRadius: 0,
-    background: 'white',
-    minHeight: '40px',
+    borderRadius: '8px',
+    minHeight: '44px',
+    width: '100%',
   }
 
   const showConvert = lead.status !== 'converted' && lead.status !== 'dead'
 
   return (
-    <div className="pb-24 max-w-4xl">
+    <div>
       {/* Back link */}
-      <div className="px-6 pt-5 pb-2">
-        <Link href="/leads" className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700 w-fit">
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-            <path d="M10 12L6 8l4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-          Back to Leads
-        </Link>
-      </div>
+      <Link href="/leads" className="flex items-center gap-1 text-sm text-muted hover:text-heading w-fit mb-4">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+          <path d="M10 12L6 8l4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+        Back to Leads
+      </Link>
 
-      {/* Header */}
-      <div className="px-6 pb-4">
-        <div className="flex flex-col md:flex-row md:items-center md:gap-3 gap-2">
-          <h1 className="font-bold" style={{ fontSize: '22px', color: '#1A2C4E' }}>
-            {lead.first_name} {lead.last_name}
-          </h1>
-          <StatusBadge status={lead.status} type="lead" />
-        </div>
+      <PageHeader
+        title={`${lead.first_name ?? ''} ${lead.last_name ?? ''}`.trim() || '—'}
+        badge={<StatusBadge status={lead.status} type="lead" />}
+      />
 
-        {/* Detail grid */}
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-4 mt-4">
-          <Field label="Email" value={lead.email} />
-          <Field label="Phone" value={lead.phone} />
-          <Field label="Country" value={lead.country} />
-          <Field label="Source Channel" value={lead.source_channel} />
-          <Field label="Assigned To" value={lead.assigned_to} />
-          <Field label="Product of Interest" value={lead.product_name} />
-          <Field label="Date Added" value={lead.date_added} />
-          <Field
-            label="Days Since Follow-up"
-            value={`${days} days`}
-            stale={days >= 7}
-          />
-        </div>
-      </div>
-
-      {/* Action bar */}
-      <div
-        className="px-6 grid grid-cols-1 md:grid-cols-3 gap-4"
-        style={{ borderTop: '1px solid #e5e7eb', paddingTop: '16px', marginTop: '0' }}
-      >
-        {/* Status */}
-        <div>
-          <p className="uppercase tracking-wide text-xs mb-2" style={{ color: '#6b7280' }}>Status</p>
-          <div className="flex items-center gap-2">
-            <select
-              value={lead.status}
-              onChange={e => handleStatusChange(e.target.value)}
-              style={selectStyle}
-            >
-              <option value="new">New</option>
-              <option value="contacted">Contacted</option>
-              <option value="quoted">Quoted</option>
-              <option value="converted">Converted</option>
-              <option value="dead">Dead</option>
-            </select>
-            <SaveMsg state={statusState} />
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* Left: contact details */}
+        <Card title="Contact &amp; Details">
+          <div className="grid grid-cols-1 gap-4">
+            <Field label="Email" value={lead.email} />
+            <Field label="Phone" value={lead.phone} />
+            <Field label="Country" value={lead.country} />
+            <Field label="Source Channel" value={lead.source_channel} />
+            <Field label="Assigned To" value={lead.assigned_to} />
+            <Field label="Product of Interest" value={lead.product_name} />
+            <Field label="Date Added" value={lead.date_added} />
+            <Field
+              label="Days Since Follow-up"
+              value={`${days} days`}
+              stale={days >= 7}
+            />
           </div>
-        </div>
+        </Card>
 
-        {/* Assigned to */}
-        <div>
-          <p className="uppercase tracking-wide text-xs mb-2" style={{ color: '#6b7280' }}>Assigned To</p>
-          <div className="flex items-center gap-2">
-            <select
-              value={lead.assigned_to}
-              onChange={e => handleAssignedChange(e.target.value)}
-              style={selectStyle}
-            >
-              <option value="Jose">Jose</option>
-              <option value="Laurent">Laurent</option>
-            </select>
-            <SaveMsg state={assignedState} />
+        {/* Right: actions */}
+        <Card title="Actions">
+          <div className="flex flex-col gap-5">
+            {/* Status */}
+            <div>
+              <p className="uppercase tracking-wide text-xs mb-2 text-muted">Status</p>
+              <div className="flex items-center gap-2">
+                <select
+                  value={lead.status}
+                  onChange={e => handleStatusChange(e.target.value)}
+                  style={selectStyle}
+                  onFocus={e => { e.currentTarget.style.borderColor = 'var(--accent)' }}
+                  onBlur={e => { e.currentTarget.style.borderColor = '#E4E7EC' }}
+                >
+                  <option value="new">New</option>
+                  <option value="contacted">Contacted</option>
+                  <option value="quoted">Quoted</option>
+                  <option value="converted">Converted</option>
+                  <option value="dead">Dead</option>
+                </select>
+                <SaveMsg state={statusState} />
+              </div>
+            </div>
+
+            {/* Assigned to */}
+            <div>
+              <p className="uppercase tracking-wide text-xs mb-2 text-muted">Assigned To</p>
+              <div className="flex items-center gap-2">
+                <select
+                  value={lead.assigned_to}
+                  onChange={e => handleAssignedChange(e.target.value)}
+                  style={selectStyle}
+                  onFocus={e => { e.currentTarget.style.borderColor = 'var(--accent)' }}
+                  onBlur={e => { e.currentTarget.style.borderColor = '#E4E7EC' }}
+                >
+                  <option value="Jose">Jose</option>
+                  <option value="Laurent">Laurent</option>
+                </select>
+                <SaveMsg state={assignedState} />
+              </div>
+            </div>
+
+            {/* Notes */}
+            <div>
+              <p className="font-semibold text-sm text-heading mb-2">Notes</p>
+              <textarea
+                value={notes}
+                onChange={e => setNotes(e.target.value)}
+                rows={5}
+                style={{
+                  width: '100%',
+                  minHeight: '120px',
+                  border: '1px solid #E4E7EC',
+                  padding: '10px 12px',
+                  fontSize: '14px',
+                  borderRadius: '8px',
+                  resize: 'vertical',
+                  outline: 'none',
+                  boxSizing: 'border-box',
+                }}
+                onFocus={e => { e.target.style.borderColor = 'var(--accent)' }}
+                onBlur={e => { e.target.style.borderColor = '#E4E7EC' }}
+              />
+              <div className="flex items-center gap-3 mt-2">
+                <button
+                  onClick={handleSaveNotes}
+                  disabled={notesState === 'saving'}
+                  className="btn-primary"
+                >
+                  {notesState === 'saving' ? 'Saving...' : 'Save Notes'}
+                </button>
+                <SaveMsg state={notesState} />
+              </div>
+            </div>
+
+            {/* Convert */}
+            {showConvert && (
+              <div className="pt-2 border-t border-card-border">
+                <button onClick={handleConvert} disabled={converting} className="btn-primary w-full">
+                  {converting ? 'Converting...' : 'Convert to Client'}
+                </button>
+              </div>
+            )}
           </div>
-        </div>
-
-        {/* Convert */}
-        {showConvert && (
-          <div>
-            <p className="uppercase tracking-wide text-xs mb-2" style={{ color: '#6b7280' }}>Actions</p>
-            <button onClick={handleConvert} disabled={converting} className="btn-primary">
-              {converting ? 'Converting...' : 'Convert to Client'}
-            </button>
-          </div>
-        )}
-      </div>
-
-      {/* Notes */}
-      <div className="px-6 mt-6">
-        <p className="font-semibold mb-2" style={{ color: '#1A2C4E' }}>Notes</p>
-        <textarea
-          value={notes}
-          onChange={e => setNotes(e.target.value)}
-          rows={5}
-          style={{
-            width: '100%',
-            minHeight: '120px',
-            border: '1px solid #d1d5db',
-            padding: '10px 12px',
-            fontSize: '16px',
-            borderRadius: 0,
-            resize: 'vertical',
-            outline: 'none',
-            boxSizing: 'border-box',
-          }}
-          onFocus={e => { e.target.style.borderColor = '#1A2C4E' }}
-          onBlur={e => { e.target.style.borderColor = '#d1d5db' }}
-        />
-        <div className="flex items-center gap-3 mt-2">
-          <button
-            onClick={handleSaveNotes}
-            disabled={notesState === 'saving'}
-            className="btn-primary"
-          >
-            {notesState === 'saving' ? 'Saving...' : 'Save Notes'}
-          </button>
-          <SaveMsg state={notesState} />
-        </div>
+        </Card>
       </div>
     </div>
   )

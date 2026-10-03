@@ -4,6 +4,9 @@ import { createServerClient } from '@/lib/supabase/server'
 import { formatGBP, categoryLabel } from '@/lib/utils'
 import StatusBadge from '@/components/StatusBadge'
 import ProductPurchasesList from '@/components/ProductPurchasesList'
+import PageHeader from '@/components/ui/PageHeader'
+import KpiCard from '@/components/ui/KpiCard'
+import Badge from '@/components/ui/Badge'
 
 interface Props {
   params: Promise<{ id: string }>
@@ -86,42 +89,18 @@ export default async function ProductDetailPage({ params }: Props) {
   return (
     <div className="pb-24">
       <div className="px-6 pt-6 pb-4">
-        <Link href="/products" className="text-sm text-gray-500 hover:text-gray-700">
+        <Link href="/products" className="text-sm text-muted hover:text-body">
           &larr; Back to Products
         </Link>
-        <div className="mt-3 flex items-center gap-3 flex-wrap">
-          <h1 className="font-bold" style={{ fontSize: '22px', color: '#1A2C4E' }}>
-            {product.name}
-          </h1>
-          <span
-            style={{
-              background: '#f3f4f6',
-              color: '#374151',
-              padding: '2px 8px',
-              fontSize: '12px',
-              fontWeight: 500,
-            }}
-          >
-            {categoryLabel(product.category)}
-          </span>
+        <div className="mt-3">
+          <PageHeader
+            title={product.name}
+            badge={<Badge>{categoryLabel(product.category)}</Badge>}
+          />
         </div>
-        <div className="flex gap-8 mt-3">
-          <div>
-            <p className="text-xs uppercase tracking-wide" style={{ color: '#6b7280' }}>
-              Purchases
-            </p>
-            <p className="font-bold text-lg mt-0.5" style={{ color: '#1A2C4E' }}>
-              {purchaseList.length}
-            </p>
-          </div>
-          <div>
-            <p className="text-xs uppercase tracking-wide" style={{ color: '#6b7280' }}>
-              Total Revenue
-            </p>
-            <p className="font-bold text-lg mt-0.5" style={{ color: '#1A2C4E' }}>
-              {formatGBP(totalRevenue)}
-            </p>
-          </div>
+        <div className="grid grid-cols-2 gap-4 mb-2">
+          <KpiCard label="Purchases" value={purchaseList.length} />
+          <KpiCard label="Total Revenue" value={formatGBP(totalRevenue)} />
         </div>
       </div>
 
@@ -129,10 +108,10 @@ export default async function ProductDetailPage({ params }: Props) {
 
       {/* ── Potential buyers ─────────────────────────────────────────────── */}
       <div className="px-6 mt-8">
-        <h2 className="font-bold mb-3" style={{ fontSize: '18px', color: '#1A2C4E' }}>
+        <h2 className="font-bold mb-3 text-heading" style={{ fontSize: '18px' }}>
           Potential buyers
         </h2>
-        <p className="text-sm font-bold mb-3" style={{ color: '#1A2C4E' }}>
+        <p className="text-sm font-bold mb-3 text-heading">
           {potentialBuyers.length} potential {potentialBuyers.length === 1 ? 'buyer' : 'buyers'}
         </p>
 
@@ -146,12 +125,12 @@ export default async function ProductDetailPage({ params }: Props) {
             <div className="hidden md:block">
               <table className="w-full border-collapse">
                 <thead>
-                  <tr className="border-b border-[#e5e7eb]">
+                  <tr className="bg-grey-subtle border-b border-card-border">
                     {['Name', 'Email', 'Status', 'Assigned To', 'Source', 'Date Added'].map(h => (
                       <th
                         key={h}
-                        className="text-left uppercase tracking-wide pb-3 pr-4"
-                        style={{ fontSize: '11px', color: '#6b7280' }}
+                        className="text-left uppercase tracking-wide text-muted"
+                        style={{ fontSize: '11px' }}
                       >
                         {h}
                       </th>
@@ -160,19 +139,19 @@ export default async function ProductDetailPage({ params }: Props) {
                 </thead>
                 <tbody>
                   {potentialBuyers.map(b => (
-                    <tr key={b.id} className="border-b border-[#f3f4f6]">
-                      <td className="py-3 pr-4 font-medium" style={{ color: '#1A2C4E' }}>
+                    <tr key={b.id} className="border-b border-card-border hover:bg-grey-subtle">
+                      <td className="font-medium text-heading">
                         <Link href={`/clients/${b.person_id}`} className="hover:underline">
                           {b.first_name} {b.last_name}
                         </Link>
                       </td>
-                      <td className="py-3 pr-4 text-sm text-gray-500">{b.email}</td>
-                      <td className="py-3 pr-4">
+                      <td className="text-sm text-muted">{b.email}</td>
+                      <td>
                         <StatusBadge status={b.status} />
                       </td>
-                      <td className="py-3 pr-4 text-sm text-gray-500">{b.assigned_to ?? '—'}</td>
-                      <td className="py-3 pr-4 text-sm text-gray-500">{b.source ?? '—'}</td>
-                      <td className="py-3 text-sm text-gray-500 whitespace-nowrap">{formatDate(b.added_date)}</td>
+                      <td className="text-sm text-muted">{b.assigned_to ?? '—'}</td>
+                      <td className="text-sm text-muted">{b.source ?? '—'}</td>
+                      <td className="text-sm text-muted whitespace-nowrap">{formatDate(b.added_date)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -182,22 +161,21 @@ export default async function ProductDetailPage({ params }: Props) {
             {/* Mobile cards */}
             <div className="md:hidden space-y-2">
               {potentialBuyers.map(b => (
-                <div key={b.id} className="border border-[#e5e7eb] p-4" style={{ borderRadius: 0 }}>
+                <div key={b.id} className="card p-4">
                   <div className="flex items-start justify-between gap-2">
                     <Link
                       href={`/clients/${b.person_id}`}
-                      className="font-semibold text-sm hover:underline"
-                      style={{ color: '#1A2C4E' }}
+                      className="font-semibold text-sm hover:underline text-heading"
                     >
                       {b.first_name} {b.last_name}
                     </Link>
                     <StatusBadge status={b.status} />
                   </div>
-                  <p className="text-gray-500 text-xs mt-1">{b.email}</p>
-                  {b.source && <p className="text-gray-500 text-xs mt-0.5">{b.source}</p>}
+                  <p className="text-muted text-xs mt-1">{b.email}</p>
+                  {b.source && <p className="text-muted text-xs mt-0.5">{b.source}</p>}
                   <div className="flex justify-between items-center mt-2">
-                    <span className="text-gray-400 text-xs">{b.assigned_to ?? '—'}</span>
-                    <span className="text-gray-400 text-xs">{formatDate(b.added_date)}</span>
+                    <span className="text-muted text-xs">{b.assigned_to ?? '—'}</span>
+                    <span className="text-muted text-xs">{formatDate(b.added_date)}</span>
                   </div>
                 </div>
               ))}

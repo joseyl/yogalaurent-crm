@@ -5,6 +5,9 @@ import ExpiringPassesPanel from '@/components/ExpiringPassesPanel'
 import AwaitingPaymentPanel from '@/components/AwaitingPaymentPanel'
 import { formatGBP } from '@/lib/utils'
 import { fetchAll } from '@/lib/fetchAll'
+import PageHeader from '@/components/ui/PageHeader'
+import KpiCard from '@/components/ui/KpiCard'
+import Collapsible from '@/components/ui/Collapsible'
 
 export const dynamic = 'force-dynamic'
 
@@ -36,18 +39,35 @@ function daysSince(dateStr: string | null): number {
   return Math.floor((Date.now() - new Date(dateStr).getTime()) / (1000 * 60 * 60 * 24))
 }
 
+// Returns the current year and month (0-indexed) as seen in the Europe/London timezone.
+// Using Intl.DateTimeFormat avoids any dependency on the machine's local timezone.
+function londonYearMonth(date: Date): { year: number; month: number } {
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Europe/London',
+    year: 'numeric',
+    month: '2-digit',
+  }).formatToParts(date)
+  const year = Number(parts.find(p => p.type === 'year')!.value)
+  const month = Number(parts.find(p => p.type === 'month')!.value) - 1 // convert to 0-indexed
+  return { year, month }
+}
+
 async function fetchDashboardData() {
   const supabase = createServerClient()
   const now = new Date()
 
-  const firstOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0]
-  const firstOfNextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1).toISOString().split('T')[0]
-  const firstOfYear = `${now.getFullYear()}-01-01`
-  const firstOfNextYear = `${now.getFullYear() + 1}-01-01`
+  // Build all date boundaries from the London calendar date so they are
+  // identical whether the server runs in UTC or BST.
+  // Date.UTC handles month overflow (e.g. month 12 or month -2) correctly.
+  const { year: londonYear, month: londonMonth } = londonYearMonth(now)
+  const firstOfMonth    = new Date(Date.UTC(londonYear, londonMonth,      1)).toISOString().split('T')[0]
+  const firstOfNextMonth = new Date(Date.UTC(londonYear, londonMonth + 1,  1)).toISOString().split('T')[0]
+  const firstOfYear     = new Date(Date.UTC(londonYear, 0,                1)).toISOString().split('T')[0]
+  const firstOfNextYear = new Date(Date.UTC(londonYear + 1, 0,            1)).toISOString().split('T')[0]
   const sevenDaysAgo = daysAgo(7)
   const twentyEightDaysAgo = daysAgo(28)
   const oneEightyDaysAgo = daysAgo(180)
-  const elevenMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 11, 1).toISOString().split('T')[0]
+  const elevenMonthsAgo = new Date(Date.UTC(londonYear, londonMonth - 11,  1)).toISOString().split('T')[0]
 
   const [
     { count: activeClients },
@@ -180,31 +200,84 @@ async function fetchDashboardData() {
 export default async function DashboardPage() {
   const { summary, staleLeads, goneQuiet, categoryRevenue, trend, latestSync } = await fetchDashboardData()
 
-  return (
-    <div className="pb-24">
-      <h1
-        className="font-bold"
-        style={{ fontSize: '24px', color: '#1A2C4E', padding: '24px 24px 16px' }}
-      >
-        Dashboard
-      </h1>
+  const dotColor = !latestSync
+    ? 'var(--color-muted)'
+    : latestSync.status === 'success'
+    ? 'var(--color-green-vivid)'
+    : latestSync.status === 'failed'
+    ? 'var(--color-red-vivid)'
+    : 'var(--color-amber-vivid)'
 
-      {/* Summary cards */}
-      <div className="grid grid-cols-2 gap-4 px-4">
-        <SummaryCard label="Active Clients" value={summary.activeClients.toString()} />
-        <SummaryCard label="Open Leads" value={summary.openLeads.toString()} />
-        <RevenueMonthCard total={summary.revenueThisMonth} lr={summary.revenueThisMonthLR} ttl={summary.revenueThisMonthTTL} />
-        <RevenueYearCard total={summary.revenueThisYear} lr={summary.revenueThisYearLR} ttl={summary.revenueThisYearTTL} />
+  return (
+    <div>
+      <PageHeader
+        title="Dashboard"
+        actions={
+          <>
+            <Link href="/leads/new" className="btn-secondary">Add Lead</Link>
+            <Link href="/clients/new" className="btn-primary">Add Client</Link>
+          </>
+        }
+      />
+
+      {/* Momence sync status */}
+      <div className="card flex items-center gap-3 p-4 mb-6">
+        <span
+          className="w-2.5 h-2.5 flex-shrink-0 rounded-full"
+          style={{ background: dotColor }}
+        />
+        <p className="text-sm text-body">
+          {latestSync
+            ? <>
+                Momence copy: last run{' '}
+                {formatUKDateTime(latestSync.finished_at ?? latestSync.created_at)},{' '}
+                {latestSync.status === 'success' ? 'Success' : 'Failed'}
+                {latestSync.status === 'failed' && latestSync.error && ` — ${latestSync.error}`}
+              </>
+            : 'Momence copy: no sync yet'
+          }
+        </p>
       </div>
 
-      {/* Charts */}
-      <DashboardCharts categoryRevenue={categoryRevenue} trend={trend} />
+      {/* KPI strip */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+        <KpiCard label="Active Clients" value={summary.activeClients} />
+        <KpiCard label="Open Leads" value={summary.openLeads} />
+        <KpiCard label="Revenue This Month" value={formatGBP(summary.revenueThisMonth)}>
+          <div className="mt-2 space-y-0.5">
+            <div className="flex justify-between">
+              <span className="text-xs text-muted">Laurent Roure</span>
+              <span className="text-xs font-medium text-muted">{formatGBP(summary.revenueThisMonthLR)}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-xs text-muted">Terra Training Ltd</span>
+              <span className="text-xs font-medium text-muted">{formatGBP(summary.revenueThisMonthTTL)}</span>
+            </div>
+          </div>
+        </KpiCard>
+        <KpiCard label="Revenue This Year" value={formatGBP(summary.revenueThisYear)}>
+          <div className="mt-2 space-y-0.5">
+            <div className="flex justify-between">
+              <span className="text-xs text-muted">Laurent Roure</span>
+              <span className="text-xs font-medium text-muted">{formatGBP(summary.revenueThisYearLR)}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-xs text-muted">Terra Training Ltd</span>
+              <span className="text-xs font-medium text-muted">{formatGBP(summary.revenueThisYearTTL)}</span>
+            </div>
+          </div>
+        </KpiCard>
+      </div>
 
       {/* Alert panels */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 px-4 mt-6">
-        <AlertPanel title="Stale Leads">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+        <Collapsible
+          title="Stale Leads"
+          count={staleLeads.length}
+          tone={staleLeads.length > 0 ? 'warning' : 'neutral'}
+        >
           {staleLeads.length === 0 ? (
-            <p className="text-gray-400 italic text-sm">All clear</p>
+            <p className="text-sm text-muted">Nothing to action.</p>
           ) : (
             staleLeads.map(lead => {
               const person = lead.people as unknown as { first_name: string; last_name: string } | null
@@ -213,131 +286,46 @@ export default async function DashboardPage() {
                 <Link
                   key={lead.id}
                   href={`/leads/${lead.id}`}
-                  className="flex items-center justify-between py-2 border-b border-gray-100 last:border-0 hover:bg-gray-50 -mx-1 px-1"
+                  className="flex items-center justify-between py-2 border-b border-card-border last:border-0 hover:bg-grey-subtle -mx-1 px-1 rounded"
                 >
-                  <span className="text-sm font-medium text-[#1A2C4E]">
+                  <span className="text-sm font-medium text-heading">
                     {person?.first_name} {person?.last_name}
                   </span>
-                  <span className="text-xs text-gray-400 ml-2">{days}d ago</span>
+                  <span className="text-xs text-muted ml-2">{days}d ago</span>
                 </Link>
               )
             })
           )}
-        </AlertPanel>
+        </Collapsible>
 
-        <AlertPanel title="Gone Quiet">
+        <Collapsible
+          title="Gone Quiet"
+          count={goneQuiet.length}
+          tone={goneQuiet.length > 0 ? 'warning' : 'neutral'}
+        >
           {goneQuiet.length === 0 ? (
-            <p className="text-gray-400 italic text-sm">All clear</p>
+            <p className="text-sm text-muted">Nothing to action.</p>
           ) : (
             goneQuiet.map(client => (
               <Link
                 key={client.id}
                 href={`/clients/${client.id}`}
-                className="flex items-center py-2 border-b border-gray-100 last:border-0 hover:bg-gray-50 -mx-1 px-1"
+                className="flex items-center py-2 border-b border-card-border last:border-0 hover:bg-grey-subtle -mx-1 px-1 rounded"
               >
-                <span className="text-sm font-medium text-[#1A2C4E]">
+                <span className="text-sm font-medium text-heading">
                   {client.first_name} {client.last_name}
                 </span>
               </Link>
             ))
           )}
-        </AlertPanel>
-
-        <AwaitingPaymentPanel />
+        </Collapsible>
 
         <ExpiringPassesPanel />
+        <AwaitingPaymentPanel />
       </div>
 
-      {/* Quick-action buttons */}
-      <div className="flex justify-center gap-3 mt-6 mb-4 px-4">
-        <Link href="/clients/new" className="btn-primary">
-          Add Client
-        </Link>
-        <Link href="/leads/new" className="btn-primary">
-          Add Lead
-        </Link>
-      </div>
-
-      {/* Momence sync status */}
-      <p className="text-xs text-center px-4 pb-4" style={{ color: '#9ca3af' }}>
-        {latestSync
-          ? <>
-              Momence copy: last run{' '}
-              {formatUKDateTime(latestSync.finished_at ?? latestSync.created_at)},{' '}
-              {latestSync.status === 'success' ? 'Success' : 'Failed'}
-              {latestSync.status === 'failed' && latestSync.error && ` — ${latestSync.error}`}
-            </>
-          : 'Momence copy: no sync yet'
-        }
-      </p>
-    </div>
-  )
-}
-
-function RevenueYearCard({ total, lr, ttl }: { total: number; lr: number; ttl: number }) {
-  return (
-    <div className="bg-white border border-[#e5e7eb] rounded-sm p-5">
-      <p className="uppercase tracking-wide text-xs" style={{ color: '#6b7280' }}>Revenue This Year</p>
-      <p className="font-bold mt-1" style={{ fontSize: '28px', color: '#1A2C4E' }}>{formatGBP(total)}</p>
-      <div className="mt-2 space-y-0.5">
-        <div className="flex justify-between">
-          <span className="text-xs" style={{ color: '#6b7280' }}>Laurent Roure</span>
-          <span className="text-xs font-medium" style={{ color: '#6b7280' }}>{formatGBP(lr)}</span>
-        </div>
-        <div className="flex justify-between">
-          <span className="text-xs" style={{ color: '#6b7280' }}>Terra Training Ltd</span>
-          <span className="text-xs font-medium" style={{ color: '#6b7280' }}>{formatGBP(ttl)}</span>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-function RevenueMonthCard({ total, lr, ttl }: { total: number; lr: number; ttl: number }) {
-  return (
-    <div className="bg-white border border-[#e5e7eb] rounded-sm p-5">
-      <p className="uppercase tracking-wide text-xs" style={{ color: '#6b7280' }}>Revenue This Month</p>
-      <p className="font-bold mt-1" style={{ fontSize: '28px', color: '#1A2C4E' }}>{formatGBP(total)}</p>
-      <div className="mt-2 space-y-0.5">
-        <div className="flex justify-between">
-          <span className="text-xs" style={{ color: '#6b7280' }}>Laurent Roure</span>
-          <span className="text-xs font-medium" style={{ color: '#6b7280' }}>{formatGBP(lr)}</span>
-        </div>
-        <div className="flex justify-between">
-          <span className="text-xs" style={{ color: '#6b7280' }}>Terra Training Ltd</span>
-          <span className="text-xs font-medium" style={{ color: '#6b7280' }}>{formatGBP(ttl)}</span>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-function SummaryCard({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="bg-white border border-[#e5e7eb] rounded-sm p-5">
-      <p
-        className="uppercase tracking-wide text-xs"
-        style={{ color: '#6b7280' }}
-      >
-        {label}
-      </p>
-      <p
-        className="font-bold mt-1"
-        style={{ fontSize: '28px', color: '#1A2C4E' }}
-      >
-        {value}
-      </p>
-    </div>
-  )
-}
-
-function AlertPanel({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <div className="bg-white border border-[#e5e7eb] border-l-4 border-l-[#B8540A] p-4">
-      <h2 className="font-semibold mb-3" style={{ color: '#1A2C4E' }}>
-        {title}
-      </h2>
-      {children}
+      {/* Charts */}
+      <DashboardCharts categoryRevenue={categoryRevenue} trend={trend} />
     </div>
   )
 }

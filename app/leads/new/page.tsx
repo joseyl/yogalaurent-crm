@@ -3,6 +3,8 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
+import PageHeader from '@/components/ui/PageHeader'
+import Card from '@/components/ui/Card'
 
 interface Product {
   id: string
@@ -24,23 +26,25 @@ interface FormData {
 const inputStyle: React.CSSProperties = {
   width: '100%',
   minHeight: '44px',
-  border: '1px solid #d1d5db',
+  border: '1px solid #E4E7EC',
   padding: '10px 12px',
   fontSize: '16px',
-  borderRadius: 0,
+  borderRadius: '8px',
   outline: 'none',
   boxSizing: 'border-box',
 }
 
-const labelStyle: React.CSSProperties = {
-  display: 'block',
-  fontSize: '14px',
-  fontWeight: 500,
-  color: '#374151',
-  marginBottom: '6px',
+const selectStyle: React.CSSProperties = {
+  width: '100%',
+  minHeight: '44px',
+  border: '1px solid #E4E7EC',
+  paddingTop: '10px',
+  paddingBottom: '10px',
+  paddingLeft: '12px',
+  fontSize: '16px',
+  outline: 'none',
+  boxSizing: 'border-box',
 }
-
-const fieldWrapper: React.CSSProperties = { marginBottom: '20px' }
 
 export default function AddLeadPage() {
   const router = useRouter()
@@ -70,11 +74,11 @@ export default function AddLeadPage() {
     setForm(prev => ({ ...prev, [field]: value }))
   }
 
-  function focusStyle(e: React.FocusEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) {
-    e.target.style.borderColor = '#1A2C4E'
+  function onFocus(e: React.FocusEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) {
+    e.target.style.borderColor = 'var(--accent)'
   }
-  function blurStyle(e: React.FocusEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) {
-    e.target.style.borderColor = '#d1d5db'
+  function onBlur(e: React.FocusEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) {
+    e.target.style.borderColor = '#E4E7EC'
   }
 
   // Group products by category for optgroup rendering
@@ -122,11 +126,10 @@ export default function AddLeadPage() {
 
   return (
     <div className="pb-24">
-      <div className="mx-auto px-6 pt-6" style={{ maxWidth: '600px' }}>
-        {/* Back link */}
+      <div className="mx-auto px-4 sm:px-6 pt-6" style={{ maxWidth: '720px' }}>
         <Link
           href="/leads"
-          className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700 w-fit mb-4"
+          className="flex items-center gap-1 text-sm text-muted hover:text-heading w-fit mb-4"
         >
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
             <path d="M10 12L6 8l4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
@@ -134,129 +137,136 @@ export default function AddLeadPage() {
           Back to Leads
         </Link>
 
-        <h1 className="font-bold" style={{ fontSize: '24px', color: '#1A2C4E', marginBottom: '24px' }}>
-          Add Lead
-        </h1>
+        <PageHeader title="Add Lead" />
 
-        <form onSubmit={handleSubmit} noValidate>
-          <div style={fieldWrapper}>
-            <label style={labelStyle}>First Name <span className="text-red-500">*</span></label>
-            <input
-              type="text"
-              required
-              value={form.first_name}
-              onChange={e => set('first_name', e.target.value)}
-              onFocus={focusStyle}
-              onBlur={blurStyle}
-              style={inputStyle}
-            />
-          </div>
+        <Card>
+          <form onSubmit={handleSubmit} noValidate>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-5 gap-y-5">
+              <div>
+                <label className="block text-xs font-medium text-muted uppercase tracking-wide mb-1.5">First Name <span className="text-red-500">*</span></label>
+                <input
+                  type="text"
+                  required
+                  value={form.first_name}
+                  onChange={e => set('first_name', e.target.value)}
+                  onFocus={onFocus}
+                  onBlur={onBlur}
+                  style={inputStyle}
+                />
+              </div>
 
-          <div style={fieldWrapper}>
-            <label style={labelStyle}>Last Name <span className="text-red-500">*</span></label>
-            <input
-              type="text"
-              required
-              value={form.last_name}
-              onChange={e => set('last_name', e.target.value)}
-              onFocus={focusStyle}
-              onBlur={blurStyle}
-              style={inputStyle}
-            />
-          </div>
+              <div>
+                <label className="block text-xs font-medium text-muted uppercase tracking-wide mb-1.5">Last Name <span className="text-red-500">*</span></label>
+                <input
+                  type="text"
+                  required
+                  value={form.last_name}
+                  onChange={e => set('last_name', e.target.value)}
+                  onFocus={onFocus}
+                  onBlur={onBlur}
+                  style={inputStyle}
+                />
+              </div>
 
-          <div style={fieldWrapper}>
-            <label style={labelStyle}>Email <span className="text-red-500">*</span></label>
-            <input
-              type="email"
-              required
-              value={form.email}
-              onChange={e => set('email', e.target.value)}
-              onFocus={focusStyle}
-              onBlur={blurStyle}
-              style={inputStyle}
-            />
-          </div>
+              <div className="sm:col-span-2">
+                <label className="block text-xs font-medium text-muted uppercase tracking-wide mb-1.5">Email <span className="text-red-500">*</span></label>
+                <input
+                  type="email"
+                  required
+                  value={form.email}
+                  onChange={e => set('email', e.target.value)}
+                  onFocus={onFocus}
+                  onBlur={onBlur}
+                  style={inputStyle}
+                />
+              </div>
 
-          <div style={fieldWrapper}>
-            <label style={labelStyle}>Phone</label>
-            <input
-              type="tel"
-              value={form.phone}
-              onChange={e => set('phone', e.target.value)}
-              onFocus={focusStyle}
-              onBlur={blurStyle}
-              style={inputStyle}
-            />
-          </div>
+              <div>
+                <label className="block text-xs font-medium text-muted uppercase tracking-wide mb-1.5">Phone</label>
+                <input
+                  type="tel"
+                  value={form.phone}
+                  onChange={e => set('phone', e.target.value)}
+                  onFocus={onFocus}
+                  onBlur={onBlur}
+                  style={inputStyle}
+                />
+              </div>
 
-          <div style={fieldWrapper}>
-            <label style={labelStyle}>Product of Interest</label>
-            <select
-              value={form.product_id}
-              onChange={e => set('product_id', e.target.value)}
-              onFocus={focusStyle}
-              onBlur={blurStyle}
-              style={inputStyle}
-            >
-              <option value="">Select a product (optional)</option>
-              {Object.entries(grouped).map(([category, items]) => (
-                <optgroup key={category} label={category.charAt(0).toUpperCase() + category.slice(1)}>
-                  {items.map(p => (
-                    <option key={p.id} value={p.id}>{p.name}</option>
+              <div>
+                <label className="block text-xs font-medium text-muted uppercase tracking-wide mb-1.5">Source Channel</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Instagram, Referral, Momence"
+                  value={form.source_channel}
+                  onChange={e => set('source_channel', e.target.value)}
+                  onFocus={onFocus}
+                  onBlur={onBlur}
+                  style={inputStyle}
+                />
+              </div>
+
+              <div className="sm:col-span-2">
+                <label className="block text-xs font-medium text-muted uppercase tracking-wide mb-1.5">Product of Interest</label>
+                <select
+                  value={form.product_id}
+                  onChange={e => set('product_id', e.target.value)}
+                  onFocus={onFocus}
+                  onBlur={onBlur}
+                  style={selectStyle}
+                >
+                  <option value="">Select a product (optional)</option>
+                  {Object.entries(grouped).map(([category, items]) => (
+                    <optgroup key={category} label={category.charAt(0).toUpperCase() + category.slice(1)}>
+                      {items.map(p => (
+                        <option key={p.id} value={p.id}>{p.name}</option>
+                      ))}
+                    </optgroup>
                   ))}
-                </optgroup>
-              ))}
-            </select>
-          </div>
+                </select>
+              </div>
 
-          <div style={fieldWrapper}>
-            <label style={labelStyle}>Source Channel</label>
-            <input
-              type="text"
-              placeholder="e.g. Instagram, Referral, Momence"
-              value={form.source_channel}
-              onChange={e => set('source_channel', e.target.value)}
-              onFocus={focusStyle}
-              onBlur={blurStyle}
-              style={inputStyle}
-            />
-          </div>
+              <div>
+                <label className="block text-xs font-medium text-muted uppercase tracking-wide mb-1.5">Assigned To</label>
+                <select
+                  value={form.assigned_to}
+                  onChange={e => set('assigned_to', e.target.value)}
+                  onFocus={onFocus}
+                  onBlur={onBlur}
+                  style={selectStyle}
+                >
+                  <option value="Jose">Jose</option>
+                  <option value="Laurent">Laurent</option>
+                </select>
+              </div>
 
-          <div style={fieldWrapper}>
-            <label style={labelStyle}>Assigned To</label>
-            <select
-              value={form.assigned_to}
-              onChange={e => set('assigned_to', e.target.value)}
-              onFocus={focusStyle}
-              onBlur={blurStyle}
-              style={inputStyle}
-            >
-              <option value="Jose">Jose</option>
-              <option value="Laurent">Laurent</option>
-            </select>
-          </div>
+              <div className="sm:col-span-2">
+                <label className="block text-xs font-medium text-muted uppercase tracking-wide mb-1.5">Notes</label>
+                <textarea
+                  rows={4}
+                  value={form.notes}
+                  onChange={e => set('notes', e.target.value)}
+                  onFocus={onFocus}
+                  onBlur={onBlur}
+                  style={{ ...inputStyle, resize: 'vertical' }}
+                />
+              </div>
+            </div>
 
-          <div style={fieldWrapper}>
-            <label style={labelStyle}>Notes</label>
-            <textarea
-              rows={4}
-              value={form.notes}
-              onChange={e => set('notes', e.target.value)}
-              onFocus={focusStyle}
-              onBlur={blurStyle}
-              style={{ ...inputStyle, resize: 'vertical' }}
-            />
-          </div>
+            {apiError && (
+              <p className="text-red-500 text-sm mt-4">{apiError}</p>
+            )}
 
-          {apiError && (
-            <p className="text-red-500 text-sm mb-4">{apiError}</p>
-          )}
-
-          <button type="submit" disabled={saving} className="btn-primary w-full md:w-auto">
-            {saving ? 'Saving...' : 'Save Lead'}
-          </button>
-        </form>
+            <div className="flex gap-3 mt-6">
+              <button type="submit" disabled={saving} className="btn-primary">
+                {saving ? 'Saving...' : 'Save Lead'}
+              </button>
+              <Link href="/leads" className="btn-secondary">
+                Cancel
+              </Link>
+            </div>
+          </form>
+        </Card>
       </div>
     </div>
   )

@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import StatusBadge from '@/components/StatusBadge'
 import LoadingSpinner from '@/app/components/LoadingSpinner'
 import { formatGBP } from '@/lib/utils'
+import PageHeader from '@/components/ui/PageHeader'
 
 interface Client {
   id: string
@@ -28,7 +29,7 @@ type SortField = 'last_name' | 'total_spend' | 'last_purchase_date'
 function SortArrow({ field, sortField, sortDirection }: { field: SortField; sortField: SortField; sortDirection: 'asc' | 'desc' }) {
   if (sortField !== field) return null
   return (
-    <span style={{ marginLeft: '4px', color: '#B8540A' }}>
+    <span className="ml-1 text-accent">
       {sortDirection === 'asc' ? '↑' : '↓'}
     </span>
   )
@@ -180,206 +181,180 @@ export default function ClientsPage() {
     )
   }
 
-  const inputCls = 'border border-[#d1d5db] px-3 py-2 text-sm bg-white focus:outline-none focus:border-[#1A2C4E]'
+  const inputCls = 'border border-card-border rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:border-accent'
+  const thCls = 'text-left text-xs font-medium text-muted uppercase tracking-wide'
 
   return (
-    <div className="pb-24">
-      {/* Header: title + Add Client button */}
-      <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-2 px-6 pt-6 pb-2">
-        <h1 className="font-bold" style={{ fontSize: '24px', color: '#1A2C4E' }}>
-          Clients
-        </h1>
-        <Link href="/clients/new" className="btn-primary self-start">
-          Add Client
-        </Link>
-      </div>
+    <div>
+      <PageHeader
+        title="Clients"
+        actions={<Link href="/clients/new" className="btn-primary">Add Client</Link>}
+      />
 
-      {/* Count + page size selector */}
-      <div className="flex items-center justify-between px-6 py-2">
-        <p className="text-gray-500 text-sm">
-          {filtered.length === allClients.length
-            ? `${allClients.length} clients`
-            : `Showing ${filtered.length} of ${allClients.length} clients`}
-        </p>
-        <div className="flex items-center gap-2">
-          <span className="text-gray-500 text-sm">Rows per page:</span>
-          <select
-            value={pageSize}
-            onChange={e => { setPageSize(Number(e.target.value)); setCurrentPage(1) }}
-            className={inputCls}
-            style={{ borderRadius: 0, minHeight: '32px', padding: '4px 8px' }}
-          >
-            <option value={25}>25</option>
-            <option value={50}>50</option>
-            <option value={100}>100</option>
-          </select>
-        </div>
-      </div>
-
-      {/* Filter row 1 */}
-      <div className="flex flex-col md:flex-row gap-3 px-6 pt-2 pb-2">
-        <input
-          type="text"
-          placeholder="Search name or email"
-          value={search}
-          onChange={e => { setSearch(e.target.value); setCurrentPage(1) }}
-          disabled={loading}
-          className={`flex-1 ${inputCls} ${loading ? 'opacity-50 pointer-events-none' : ''}`}
-          style={{ borderRadius: 0, minHeight: '40px' }}
-        />
-        <select
-          value={statusFilter}
-          onChange={e => { setStatusFilter(e.target.value); setCurrentPage(1) }}
-          className={inputCls}
-          style={{ borderRadius: 0, minHeight: '40px' }}
-        >
-          <option value="all">All Statuses</option>
-          <option value="client">Client</option>
-          <option value="lead">Lead</option>
-          <option value="inactive">Inactive</option>
-          <option value="deceased">Deceased</option>
-        </select>
-        <select
-          value={assignedFilter}
-          onChange={e => { setAssignedFilter(e.target.value); setCurrentPage(1) }}
-          className={inputCls}
-          style={{ borderRadius: 0, minHeight: '40px' }}
-        >
-          <option value="all">All</option>
-          <option value="Jose">Jose</option>
-          <option value="Laurent">Laurent</option>
-        </select>
-      </div>
-
-      {/* Filter row 2 */}
-      <div className="flex flex-col md:flex-row gap-3 px-6 pb-4">
-        <select
-          value={categoryFilter}
-          onChange={e => { setCategoryFilter(e.target.value); setCurrentPage(1) }}
-          className={inputCls}
-          style={{ borderRadius: 0, minHeight: '40px' }}
-        >
-          <option value="all">All Categories</option>
-          <option value="classes">Classes</option>
-          <option value="training">Training</option>
-          <option value="retreat">Retreat</option>
-          <option value="workshop">In-person Workshop</option>
-          <option value="private">Private</option>
-          <option value="other">Other</option>
-        </select>
-        <div className="flex items-center gap-2">
-          <label className="text-sm text-gray-500 whitespace-nowrap">Min spend £</label>
-          <input
-            type="number"
-            min={0}
-            step={1}
-            value={minSpend}
-            onChange={e => { setMinSpend(e.target.value); setCurrentPage(1) }}
-            className={inputCls}
-            style={{ borderRadius: 0, minHeight: '40px', width: '100px' }}
-          />
+      {/* Toolbar */}
+      <div className="card mb-4">
+        <div className="p-4 flex flex-col gap-3">
+          {/* Count + page size */}
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <p className="text-sm text-muted">
+              {filtered.length === allClients.length
+                ? `${allClients.length} clients`
+                : `Showing ${filtered.length} of ${allClients.length} clients`}
+            </p>
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted">Rows per page:</span>
+              <select
+                value={pageSize}
+                onChange={e => { setPageSize(Number(e.target.value)); setCurrentPage(1) }}
+                className="border border-card-border rounded-lg px-2 py-1 text-sm bg-white focus:outline-none focus:border-accent"
+              >
+                <option value={25}>25</option>
+                <option value={50}>50</option>
+                <option value={100}>100</option>
+              </select>
+            </div>
+          </div>
+          {/* Filter row 1 */}
+          <div className="flex flex-col md:flex-row gap-3">
+            <input
+              type="text"
+              placeholder="Search name or email"
+              value={search}
+              onChange={e => { setSearch(e.target.value); setCurrentPage(1) }}
+              disabled={loading}
+              className={`flex-1 ${inputCls} min-h-[44px] md:min-h-9 ${loading ? 'opacity-50 pointer-events-none' : ''}`}
+            />
+            <select
+              value={statusFilter}
+              onChange={e => { setStatusFilter(e.target.value); setCurrentPage(1) }}
+              className={`${inputCls} min-h-[44px] md:min-h-9`}
+            >
+              <option value="all">All Statuses</option>
+              <option value="client">Client</option>
+              <option value="lead">Lead</option>
+              <option value="inactive">Inactive</option>
+              <option value="deceased">Deceased</option>
+            </select>
+            <select
+              value={assignedFilter}
+              onChange={e => { setAssignedFilter(e.target.value); setCurrentPage(1) }}
+              className={`${inputCls} min-h-[44px] md:min-h-9`}
+            >
+              <option value="all">All</option>
+              <option value="Jose">Jose</option>
+              <option value="Laurent">Laurent</option>
+            </select>
+          </div>
+          {/* Filter row 2 */}
+          <div className="flex flex-col md:flex-row gap-3">
+            <select
+              value={categoryFilter}
+              onChange={e => { setCategoryFilter(e.target.value); setCurrentPage(1) }}
+              className={`${inputCls} min-h-[44px] md:min-h-9`}
+            >
+              <option value="all">All Categories</option>
+              <option value="classes">Classes</option>
+              <option value="training">Training</option>
+              <option value="retreat">Retreat</option>
+              <option value="workshop">In-person Workshop</option>
+              <option value="private">Private</option>
+              <option value="other">Other</option>
+            </select>
+            <div className="flex items-center gap-2">
+              <label className="text-sm text-muted whitespace-nowrap">Min spend £</label>
+              <input
+                type="number"
+                min={0}
+                step={1}
+                value={minSpend}
+                onChange={e => { setMinSpend(e.target.value); setCurrentPage(1) }}
+                className={`${inputCls} min-h-[44px] md:min-h-9 w-24`}
+              />
+            </div>
+          </div>
         </div>
       </div>
 
       {/* Desktop table */}
-      <div className="hidden md:block px-6">
-        <table className="w-full border-collapse">
-          <thead>
-            <tr className="border-b border-[#e5e7eb]">
-              {/* Sortable: Name */}
-              <th
-                className="text-left uppercase tracking-wide pb-3 pr-4 cursor-pointer select-none"
-                style={{ fontSize: '11px', color: '#6b7280' }}
-                onClick={() => handleSort('last_name')}
-              >
-                Name<SortArrow field="last_name" sortField={sortField} sortDirection={sortDirection} />
-              </th>
-              {/* Non-sortable */}
-              {['Email', 'Status', 'Source', 'Assigned To'].map(h => (
+      <div className="hidden md:block card overflow-hidden mb-4">
+        <div className="overflow-x-auto">
+          <table className="w-full border-collapse">
+            <thead>
+              <tr className="bg-grey-subtle border-b border-card-border">
                 <th
-                  key={h}
-                  className="text-left uppercase tracking-wide pb-3 pr-4"
-                  style={{ fontSize: '11px', color: '#6b7280' }}
+                  className={`${thCls} cursor-pointer select-none whitespace-nowrap`}
+                  onClick={() => handleSort('last_name')}
                 >
-                  {h}
+                  Name <SortArrow field="last_name" sortField={sortField} sortDirection={sortDirection} />
                 </th>
-              ))}
-              {/* Sortable: Total Spend */}
-              <th
-                className="text-right uppercase tracking-wide pb-3 pr-4 cursor-pointer select-none"
-                style={{ fontSize: '11px', color: '#6b7280' }}
-                onClick={() => handleSort('total_spend')}
-              >
-                Total Spend<SortArrow field="total_spend" sortField={sortField} sortDirection={sortDirection} />
-              </th>
-              {/* Sortable: Last Purchase */}
-              <th
-                className="text-left uppercase tracking-wide pb-3 cursor-pointer select-none"
-                style={{ fontSize: '11px', color: '#6b7280' }}
-                onClick={() => handleSort('last_purchase_date')}
-              >
-                Last Purchase<SortArrow field="last_purchase_date" sortField={sortField} sortDirection={sortDirection} />
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {paginated.map(client => (
-              <tr
-                key={client.id}
-                className="border-b border-[#f3f4f6] hover:bg-gray-50 cursor-pointer"
-                onClick={() => router.push(`/clients/${client.id}`)}
-              >
-                <td className="py-3 pr-4 font-medium" style={{ color: '#1A2C4E' }}>
-                  {client.first_name} {client.last_name}
-                </td>
-                <td className="py-3 pr-4 text-gray-500 text-sm">{client.email}</td>
-                <td className="py-3 pr-4">
-                  <StatusBadge status={client.status} />
-                </td>
-                <td className="py-3 pr-4 text-gray-500 text-sm max-w-[140px] truncate">
-                  {client.source_channel ?? '—'}
-                </td>
-                <td className="py-3 pr-4 text-sm">{client.assigned_to}</td>
-                <td className="py-3 pr-4 text-sm text-right">{formatCurrency(client.total_spend)}</td>
-                <td className="py-3 text-gray-500 text-sm">{formatDate(client.last_purchase_date)}</td>
+                {['Email', 'Status', 'Source', 'Assigned To'].map(h => (
+                  <th key={h} className={`${thCls} whitespace-nowrap`}>{h}</th>
+                ))}
+                <th
+                  className={`${thCls} text-right cursor-pointer select-none whitespace-nowrap`}
+                  onClick={() => handleSort('total_spend')}
+                >
+                  Total Spend <SortArrow field="total_spend" sortField={sortField} sortDirection={sortDirection} />
+                </th>
+                <th
+                  className={`${thCls} cursor-pointer select-none whitespace-nowrap`}
+                  onClick={() => handleSort('last_purchase_date')}
+                >
+                  Last Purchase <SortArrow field="last_purchase_date" sortField={sortField} sortDirection={sortDirection} />
+                </th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-        {filtered.length === 0 && (
-          <p className="text-gray-400 text-sm py-8 text-center">No clients match the current filters.</p>
-        )}
+            </thead>
+            <tbody>
+              {paginated.map(client => (
+                <tr
+                  key={client.id}
+                  className="border-b border-card-border hover:bg-grey-subtle cursor-pointer transition-colors"
+                  onClick={() => router.push(`/clients/${client.id}`)}
+                >
+                  <td className="font-medium text-heading">{client.first_name} {client.last_name}</td>
+                  <td className="text-muted text-sm">{client.email}</td>
+                  <td><StatusBadge status={client.status} /></td>
+                  <td className="text-muted text-sm max-w-[140px] truncate">{client.source_channel ?? '—'}</td>
+                  <td className="text-sm text-body">{client.assigned_to}</td>
+                  <td className="text-sm text-right font-medium text-heading">{formatCurrency(client.total_spend)}</td>
+                  <td className="text-muted text-sm">{formatDate(client.last_purchase_date)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {filtered.length === 0 && (
+            <p className="text-muted text-sm py-8 text-center">No clients match the current filters.</p>
+          )}
+        </div>
       </div>
 
       {/* Mobile cards */}
-      <div className="md:hidden px-4">
+      <div className="md:hidden flex flex-col gap-3 mb-4">
         {filtered.length === 0 && (
-          <p className="text-gray-400 text-sm py-8 text-center">No clients match the current filters.</p>
+          <p className="text-muted text-sm py-8 text-center">No clients match the current filters.</p>
         )}
         {paginated.map(client => (
           <Link
             key={client.id}
             href={`/clients/${client.id}`}
-            className="block bg-white border border-[#e5e7eb] p-4 mb-2 active:bg-gray-50"
-            style={{ borderRadius: 0 }}
+            className="card block p-4 active:bg-grey-subtle"
+            style={{ textDecoration: 'none' }}
           >
             <div className="flex items-center justify-between">
-              <span className="font-semibold" style={{ color: '#1A2C4E' }}>
-                {client.first_name} {client.last_name}
-              </span>
+              <span className="font-semibold text-heading">{client.first_name} {client.last_name}</span>
               <StatusBadge status={client.status} />
             </div>
-            <p className="text-gray-500 text-sm mt-1">{client.email}</p>
-            <p className="font-semibold text-sm mt-1" style={{ color: '#B8540A' }}>
-              {formatCurrency(client.total_spend)}
-            </p>
-            <p className="text-gray-400 text-xs mt-0.5">{formatDate(client.last_purchase_date)}</p>
+            <p className="text-muted text-sm mt-1">{client.email}</p>
+            <div className="flex items-center justify-between mt-2">
+              <span className="text-sm font-semibold text-accent">{formatCurrency(client.total_spend)}</span>
+              <span className="text-xs text-muted">{formatDate(client.last_purchase_date)}</span>
+            </div>
           </Link>
         ))}
       </div>
 
       {/* Pagination + Export (desktop) */}
-      <div className="hidden md:grid grid-cols-3 items-center mt-4 px-6">
+      <div className="hidden md:grid grid-cols-3 items-center mt-4">
         <div />
         <div className="flex justify-center items-center gap-3">
           <button
@@ -389,7 +364,7 @@ export default function ClientsPage() {
           >
             Previous
           </button>
-          <span className="text-gray-500 text-sm whitespace-nowrap">
+          <span className="text-muted text-sm whitespace-nowrap">
             Page {safePage} of {totalPages}
           </span>
           <button
@@ -408,7 +383,7 @@ export default function ClientsPage() {
       </div>
 
       {/* Pagination + Export (mobile) */}
-      <div className="md:hidden flex flex-col items-center gap-3 mt-4 px-4">
+      <div className="md:hidden flex flex-col items-center gap-3 mt-4">
         <div className="flex items-center gap-3">
           <button
             onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
@@ -417,7 +392,7 @@ export default function ClientsPage() {
           >
             Previous
           </button>
-          <span className="text-gray-500 text-sm">
+          <span className="text-muted text-sm">
             Page {safePage} of {totalPages}
           </span>
           <button

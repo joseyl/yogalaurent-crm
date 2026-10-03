@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import Collapsible from '@/components/ui/Collapsible'
 
 interface PassRow {
   id: string
@@ -52,19 +53,19 @@ export default function ExpiringPassesPanel() {
     setPasses(prev => prev.filter(p => p.id !== purchaseId))
   }
 
+  const count = loaded ? passes.length : '-'
+  const tone = loaded && passes.length > 0 ? 'warning' : 'neutral'
+
   return (
-    <div className="bg-white border border-[#e5e7eb] border-l-4 border-l-[#B8540A] p-4">
-      <h2 className="font-semibold mb-1" style={{ color: '#1A2C4E' }}>
-        Expiring Passes
-      </h2>
-      <p className="text-xs text-gray-400 mb-3">
+    <Collapsible title="Expiring Passes" count={count} tone={tone}>
+      <p className="text-xs text-muted mb-3">
         Passes expiring within 15 days or expired in the last 30 days
       </p>
 
       {!loaded ? (
-        <p className="text-gray-400 italic text-sm">Loading…</p>
+        <p className="text-sm text-muted italic">Loading...</p>
       ) : passes.length === 0 ? (
-        <p className="text-gray-400 italic text-sm">No passes expiring soon</p>
+        <p className="text-sm text-muted">Nothing to action.</p>
       ) : (
         passes.map(pass => {
           const days = daysUntil(pass.expires_at)
@@ -76,21 +77,21 @@ export default function ExpiringPassesPanel() {
           return (
             <div
               key={pass.id}
-              className="flex items-center justify-between py-2 border-b border-gray-100 last:border-0 gap-2"
+              className="flex items-center justify-between py-2 border-b border-card-border last:border-0 gap-2"
             >
               <Link
                 href={`/clients/${pass.people?.id}`}
-                className="text-sm font-medium text-[#1A2C4E] hover:underline shrink-0"
+                className="text-sm font-medium text-heading hover:text-accent hover:underline shrink-0"
               >
                 {fullName || 'Unknown'}
               </Link>
-              <span className="text-xs text-gray-500 hidden sm:block truncate flex-1">
+              <span className="text-xs text-muted hidden sm:block truncate flex-1">
                 {pass.products?.name}
               </span>
-              <span className="text-xs text-gray-400 shrink-0">{formatDate(pass.expires_at)}</span>
+              <span className="text-xs text-muted shrink-0">{formatDate(pass.expires_at)}</span>
               <span
                 className="text-xs font-medium shrink-0"
-                style={{ color: expired ? '#dc2626' : '#d97706' }}
+                style={{ color: expired ? 'var(--color-red-vivid)' : 'var(--color-amber-vivid)' }}
               >
                 {expired ? 'Expired' : `Expires in ${days}d`}
               </span>
@@ -104,6 +105,6 @@ export default function ExpiringPassesPanel() {
           )
         })
       )}
-    </div>
+    </Collapsible>
   )
 }

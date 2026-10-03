@@ -1,10 +1,12 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import Link from 'next/link'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import StatusBadge from '@/components/StatusBadge'
 import LoadingSpinner from '@/app/components/LoadingSpinner'
+import Badge from '@/components/ui/Badge'
+import PageHeader from '@/components/ui/PageHeader'
 
 interface Lead {
   id: string
@@ -19,36 +21,6 @@ interface Lead {
   last_name: string | null
   email: string
   product_name: string | null
-}
-
-function StaleDot() {
-  return (
-    <span
-      style={{
-        display: 'inline-block',
-        width: '8px',
-        height: '8px',
-        borderRadius: '50%',
-        background: '#dc2626',
-        marginRight: '5px',
-        verticalAlign: 'middle',
-        flexShrink: 0,
-      }}
-    />
-  )
-}
-
-function DaysBadge({ days }: { days: number }) {
-  const stale = days >= 7
-  return (
-    <span
-      className="inline-flex items-center"
-      style={{ color: stale ? '#dc2626' : '#6b7280', fontWeight: stale ? 700 : 400 }}
-    >
-      {stale && <StaleDot />}
-      {days}d
-    </span>
-  )
 }
 
 export default function LeadsPage() {
@@ -104,127 +76,116 @@ export default function LeadsPage() {
     )
   }
 
-  return (
-    <div className="pb-24">
-      {/* Header */}
-      <div className="px-6 pt-6 pb-2 flex flex-col md:flex-row md:items-center md:justify-between gap-2">
-        <div>
-          <h1 className="font-bold" style={{ fontSize: '24px', color: '#1A2C4E' }}>
-            Leads
-          </h1>
-          <p className="text-gray-500 text-sm mt-1">
-            {filtered.length === allLeads.length
-              ? `${allLeads.length} leads`
-              : `Showing ${filtered.length} of ${allLeads.length} leads`}
-          </p>
-        </div>
-        <Link href="/leads/new" className="btn-primary self-start md:self-auto">
-          Add Lead
-        </Link>
-      </div>
+  const inputCls = 'border border-card-border rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:border-accent'
+  const thCls = 'text-left text-xs font-medium text-muted uppercase tracking-wide'
 
-      {/* Filter bar */}
-      <div className="flex flex-col md:flex-row gap-3 px-6 py-4">
-        <input
-          type="text"
-          placeholder="Search name, email, or product"
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-          disabled={loading}
-          className={`flex-1 border border-[#d1d5db] px-3 py-2 text-sm focus:outline-none focus:border-[#1A2C4E] ${loading ? 'opacity-50 pointer-events-none' : ''}`}
-          style={{ borderRadius: 0, minHeight: '40px' }}
-        />
-        <select
-          value={statusFilter}
-          onChange={e => setStatusFilter(e.target.value)}
-          className="border border-[#d1d5db] px-3 py-2 text-sm bg-white focus:outline-none focus:border-[#1A2C4E]"
-          style={{ borderRadius: 0, minHeight: '40px' }}
-        >
-          <option value="all">All Statuses</option>
-          <option value="new">New</option>
-          <option value="contacted">Contacted</option>
-          <option value="quoted">Quoted</option>
-          <option value="converted">Converted</option>
-          <option value="dead">Dead</option>
-        </select>
-        <select
-          value={assignedFilter}
-          onChange={e => setAssignedFilter(e.target.value)}
-          className="border border-[#d1d5db] px-3 py-2 text-sm bg-white focus:outline-none focus:border-[#1A2C4E]"
-          style={{ borderRadius: 0, minHeight: '40px' }}
-        >
-          <option value="all">All</option>
-          <option value="Jose">Jose</option>
-          <option value="Laurent">Laurent</option>
-        </select>
+  return (
+    <div>
+      <PageHeader
+        title="Leads"
+        subtitle={
+          filtered.length === allLeads.length
+            ? `${allLeads.length} leads`
+            : `Showing ${filtered.length} of ${allLeads.length} leads`
+        }
+        actions={<Link href="/leads/new" className="btn-primary">Add Lead</Link>}
+      />
+
+      {/* Toolbar */}
+      <div className="card mb-4">
+        <div className="p-4 flex flex-col md:flex-row gap-3">
+          <input
+            type="text"
+            placeholder="Search name, email, or product"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            disabled={loading}
+            className={`flex-1 ${inputCls} min-h-[44px] md:min-h-9 ${loading ? 'opacity-50 pointer-events-none' : ''}`}
+          />
+          <select
+            value={statusFilter}
+            onChange={e => setStatusFilter(e.target.value)}
+            className={`${inputCls} min-h-[44px] md:min-h-9`}
+          >
+            <option value="all">All Statuses</option>
+            <option value="new">New</option>
+            <option value="contacted">Contacted</option>
+            <option value="quoted">Quoted</option>
+            <option value="converted">Converted</option>
+            <option value="dead">Dead</option>
+          </select>
+          <select
+            value={assignedFilter}
+            onChange={e => setAssignedFilter(e.target.value)}
+            className={`${inputCls} min-h-[44px] md:min-h-9`}
+          >
+            <option value="all">All</option>
+            <option value="Jose">Jose</option>
+            <option value="Laurent">Laurent</option>
+          </select>
+        </div>
       </div>
 
       {/* Desktop table */}
-      <div className="hidden md:block px-6">
-        <table className="w-full border-collapse">
-          <thead>
-            <tr className="border-b border-[#e5e7eb]">
-              {['Name', 'Email', 'Product of Interest', 'Status', 'Assigned To', 'Days Since Follow-up'].map(h => (
-                <th
-                  key={h}
-                  className="text-left uppercase tracking-wide pb-3 pr-4"
-                  style={{ fontSize: '11px', color: '#6b7280' }}
-                >
-                  {h}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.map(lead => (
-              <tr
-                key={lead.id}
-                className="border-b border-[#f3f4f6] hover:bg-gray-50 cursor-pointer"
-                onClick={() => router.push(`/leads/${lead.id}`)}
-              >
-                <td className="py-3 pr-4 font-medium" style={{ color: '#1A2C4E' }}>
-                  {lead.first_name} {lead.last_name}
-                </td>
-                <td className="py-3 pr-4 text-gray-500 text-sm">{lead.email}</td>
-                <td className="py-3 pr-4 text-gray-500 text-sm">{lead.product_name ?? '—'}</td>
-                <td className="py-3 pr-4">
-                  <StatusBadge status={lead.status} type="lead" />
-                </td>
-                <td className="py-3 pr-4 text-sm">{lead.assigned_to}</td>
-                <td className="py-3 text-sm">
-                  <DaysBadge days={lead.days_since_followup} />
-                </td>
+      <div className="hidden md:block card overflow-hidden mb-4">
+        <div className="overflow-x-auto">
+          <table className="w-full border-collapse">
+            <thead>
+              <tr className="bg-grey-subtle border-b border-card-border">
+                {['Name', 'Email', 'Product of Interest', 'Status', 'Assigned To', 'Days Since Follow-up'].map(h => (
+                  <th
+                    key={h}
+                    className={`${thCls} whitespace-nowrap`}
+                  >
+                    {h}
+                  </th>
+                ))}
               </tr>
-            ))}
-          </tbody>
-        </table>
-        {filtered.length === 0 && (
-          <p className="text-gray-400 text-sm py-8 text-center">No leads match the current filters.</p>
-        )}
+            </thead>
+            <tbody>
+              {filtered.map(lead => (
+                <tr
+                  key={lead.id}
+                  className="border-b border-card-border hover:bg-grey-subtle cursor-pointer transition-colors"
+                  onClick={() => router.push(`/leads/${lead.id}`)}
+                >
+                  <td className="font-medium text-heading">{lead.first_name} {lead.last_name}</td>
+                  <td className="text-muted text-sm">{lead.email}</td>
+                  <td className="text-muted text-sm">{lead.product_name ?? '—'}</td>
+                  <td><StatusBadge status={lead.status} type="lead" /></td>
+                  <td className="text-sm text-body">{lead.assigned_to}</td>
+                  <td className="text-sm">
+                    <Badge tone={lead.days_since_followup >= 7 ? 'red' : 'grey'}>{lead.days_since_followup}d</Badge>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {filtered.length === 0 && (
+            <p className="text-muted text-sm py-8 text-center">No leads match the current filters.</p>
+          )}
+        </div>
       </div>
 
       {/* Mobile cards */}
-      <div className="md:hidden px-4">
+      <div className="md:hidden flex flex-col gap-3">
         {filtered.length === 0 && (
-          <p className="text-gray-400 text-sm py-8 text-center">No leads match the current filters.</p>
+          <p className="text-muted text-sm py-8 text-center">No leads match the current filters.</p>
         )}
         {filtered.map(lead => (
           <div
             key={lead.id}
-            className="bg-white border border-[#e5e7eb] p-4 mb-2 cursor-pointer active:bg-gray-50"
-            style={{ borderRadius: 0 }}
+            className="card p-4 cursor-pointer active:bg-grey-subtle"
             onClick={() => router.push(`/leads/${lead.id}`)}
           >
             <div className="flex items-center justify-between">
-              <span className="font-semibold" style={{ color: '#1A2C4E' }}>
-                {lead.first_name} {lead.last_name}
-              </span>
+              <span className="font-semibold text-heading">{lead.first_name} {lead.last_name}</span>
               <StatusBadge status={lead.status} type="lead" />
             </div>
-            <p className="text-gray-500 text-sm mt-1">{lead.product_name ?? '—'}</p>
+            <p className="text-muted text-sm mt-1">{lead.product_name ?? '—'}</p>
             <div className="flex items-center justify-between mt-2">
-              <span className="text-sm text-gray-500">{lead.assigned_to}</span>
-              <DaysBadge days={lead.days_since_followup} />
+              <span className="text-sm text-body">{lead.assigned_to}</span>
+              <Badge tone={lead.days_since_followup >= 7 ? 'red' : 'grey'}>{lead.days_since_followup}d</Badge>
             </div>
           </div>
         ))}

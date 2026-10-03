@@ -5,6 +5,8 @@ import Link from 'next/link'
 import StatusBadge from '@/components/StatusBadge'
 import LoadingSpinner from '@/app/components/LoadingSpinner'
 import { formatGBP, categoryLabel } from '@/lib/utils'
+import PageHeader from '@/components/ui/PageHeader'
+import Collapsible from '@/components/ui/Collapsible'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -82,53 +84,26 @@ function today(): string {
   return new Date().toISOString().split('T')[0]
 }
 
-// ── Shared table/card styles ──────────────────────────────────────────────────
+// ── Shared table styles ───────────────────────────────────────────────────────
 
 const thStyle: React.CSSProperties = {
   fontSize: '11px',
-  color: '#6b7280',
+  color: 'var(--color-muted)',
   textTransform: 'uppercase',
   letterSpacing: '0.05em',
-  paddingBottom: '10px',
   textAlign: 'left',
-  borderBottom: '1px solid #e5e7eb',
   fontWeight: 500,
 }
 
 const tdStyle: React.CSSProperties = {
-  padding: '10px 0',
   fontSize: '14px',
-  borderBottom: '1px solid #f3f4f6',
+  borderBottom: '1px solid var(--color-card-border)',
   verticalAlign: 'middle',
-}
-
-function SectionHeading({
-  title,
-  onExport,
-}: {
-  title: string
-  onExport: () => void
-}) {
-  return (
-    <div className="flex justify-between items-center mt-8 mb-4">
-      <h2 style={{ fontSize: '18px', fontWeight: 700, color: '#1A2C4E' }}>{title}</h2>
-      <button onClick={onExport} className="btn-secondary">Export CSV</button>
-    </div>
-  )
-}
-
-function SubHeading({ title, onExport }: { title: string; onExport: () => void }) {
-  return (
-    <div className="flex justify-between items-center mt-5 mb-3">
-      <h3 style={{ fontSize: '15px', fontWeight: 600, color: '#1A2C4E' }}>{title}</h3>
-      <button onClick={onExport} className="btn-secondary">Export CSV</button>
-    </div>
-  )
 }
 
 function Empty() {
   return (
-    <p className="text-gray-400 italic text-sm text-center py-4">
+    <p className="text-muted italic text-sm text-center py-4">
       No data for the selected period.
     </p>
   )
@@ -138,21 +113,21 @@ function Empty() {
 
 function RevenueSummaryBlock({ data }: { data: { total: number; lr: number; ttl: number } }) {
   return (
-    <div className="border border-[#e5e7eb] p-5 mb-2" style={{ background: '#f9fafb' }}>
-      <p className="uppercase tracking-wide text-xs mb-3" style={{ color: '#6b7280' }}>Revenue for Selected Period</p>
+    <div className="card p-5 mb-4">
+      <p className="uppercase tracking-wide text-xs mb-3 text-muted">Revenue for Selected Period</p>
       <div className="flex flex-col gap-2">
         <div className="flex justify-between items-baseline">
-          <span className="font-bold" style={{ fontSize: '22px', color: '#1A2C4E' }}>{formatGBP(data.total)}</span>
-          <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: '#6b7280' }}>Total</span>
+          <span className="font-bold text-heading" style={{ fontSize: '22px' }}>{formatGBP(data.total)}</span>
+          <span className="text-xs font-semibold uppercase tracking-wide text-muted">Total</span>
         </div>
-        <div className="border-t border-[#e5e7eb] pt-2 flex flex-col gap-1.5">
+        <div className="border-t border-card-border pt-2 flex flex-col gap-1.5">
           <div className="flex justify-between items-center">
-            <span className="text-sm" style={{ color: '#374151' }}>Laurent Roure</span>
-            <span className="text-sm font-medium" style={{ color: '#374151' }}>{formatGBP(data.lr)}</span>
+            <span className="text-sm text-body">Laurent Roure</span>
+            <span className="text-sm font-medium text-body">{formatGBP(data.lr)}</span>
           </div>
           <div className="flex justify-between items-center">
-            <span className="text-sm" style={{ color: '#374151' }}>Terra Training Ltd</span>
-            <span className="text-sm font-medium" style={{ color: '#374151' }}>{formatGBP(data.ttl)}</span>
+            <span className="text-sm text-body">Terra Training Ltd</span>
+            <span className="text-sm font-medium text-body">{formatGBP(data.ttl)}</span>
           </div>
         </div>
       </div>
@@ -178,15 +153,17 @@ function TopSpendersSection({ data }: { data: Spender[] }) {
   }
 
   return (
-    <>
-      <SectionHeading title="Top 20 Spenders" onExport={exportCsv} />
+    <Collapsible title="Top 20 Spenders" defaultOpen>
+      <div className="flex justify-end mb-4">
+        <button onClick={exportCsv} className="btn-secondary">Export CSV</button>
+      </div>
       {data.length === 0 ? <Empty /> : (
         <>
           {/* Desktop table */}
           <div className="hidden md:block">
             <table className="w-full border-collapse">
               <thead>
-                <tr>
+                <tr className="bg-grey-subtle border-b border-card-border">
                   <th style={{ ...thStyle, width: '48px' }}>Rank</th>
                   <th style={thStyle}>Name</th>
                   <th style={thStyle}>Email</th>
@@ -197,14 +174,14 @@ function TopSpendersSection({ data }: { data: Spender[] }) {
               </thead>
               <tbody>
                 {data.map((s, i) => (
-                  <tr key={s.id}>
-                    <td style={{ ...tdStyle, color: '#6b7280' }}>{i + 1}</td>
-                    <td style={{ ...tdStyle, fontWeight: 500, color: '#1A2C4E' }}>
+                  <tr key={s.id} className="hover:bg-grey-subtle">
+                    <td style={{ ...tdStyle, color: 'var(--color-muted)' }}>{i + 1}</td>
+                    <td style={{ ...tdStyle, fontWeight: 500, color: 'var(--color-heading)' }}>
                       <Link href={`/clients/${s.id}`} className="hover:underline">
                         {s.first_name} {s.last_name}
                       </Link>
                     </td>
-                    <td style={{ ...tdStyle, color: '#6b7280' }}>{s.email}</td>
+                    <td style={{ ...tdStyle, color: 'var(--color-muted)' }}>{s.email}</td>
                     <td style={tdStyle}><StatusBadge status={s.status} /></td>
                     <td style={{ ...tdStyle, textAlign: 'center' }}>{s.purchase_count}</td>
                     <td style={{ ...tdStyle, textAlign: 'right', fontWeight: 600 }}>{fmt(s.total_spend)}</td>
@@ -219,29 +196,28 @@ function TopSpendersSection({ data }: { data: Spender[] }) {
               <Link
                 key={s.id}
                 href={`/clients/${s.id}`}
-                className="block border border-[#e5e7eb] p-4"
-                style={{ borderRadius: 0 }}
+                className="card block p-4"
               >
                 <div className="flex items-start justify-between gap-2">
                   <div>
-                    <p className="font-semibold text-sm" style={{ color: '#1A2C4E' }}>
-                      <span className="text-gray-400 font-normal mr-1">#{i + 1}</span>
+                    <p className="font-semibold text-sm text-heading">
+                      <span className="text-muted font-normal mr-1">#{i + 1}</span>
                       {s.first_name} {s.last_name}
                     </p>
-                    <p className="text-gray-500 text-xs mt-0.5">{s.email}</p>
+                    <p className="text-muted text-xs mt-0.5">{s.email}</p>
                   </div>
                   <StatusBadge status={s.status} />
                 </div>
                 <div className="flex justify-between items-center mt-2">
-                  <span className="text-gray-500 text-xs">{s.purchase_count} purchases</span>
-                  <span className="font-semibold text-sm" style={{ color: '#B8540A' }}>{fmt(s.total_spend)}</span>
+                  <span className="text-muted text-xs">{s.purchase_count} purchases</span>
+                  <span className="font-semibold text-sm" style={{ color: 'var(--accent)' }}>{fmt(s.total_spend)}</span>
                 </div>
               </Link>
             ))}
           </div>
         </>
       )}
-    </>
+    </Collapsible>
   )
 }
 
@@ -254,7 +230,7 @@ function CategoryTable({ data }: { data: CategorySpender[] }) {
       <div className="hidden md:block">
         <table className="w-full border-collapse">
           <thead>
-            <tr>
+            <tr className="bg-grey-subtle border-b border-card-border">
               <th style={{ ...thStyle, width: '48px' }}>Rank</th>
               <th style={thStyle}>Name</th>
               <th style={thStyle}>Email</th>
@@ -264,14 +240,14 @@ function CategoryTable({ data }: { data: CategorySpender[] }) {
           </thead>
           <tbody>
             {data.map((s, i) => (
-              <tr key={s.id}>
-                <td style={{ ...tdStyle, color: '#6b7280' }}>{i + 1}</td>
-                <td style={{ ...tdStyle, fontWeight: 500, color: '#1A2C4E' }}>
+              <tr key={s.id} className="hover:bg-grey-subtle">
+                <td style={{ ...tdStyle, color: 'var(--color-muted)' }}>{i + 1}</td>
+                <td style={{ ...tdStyle, fontWeight: 500, color: 'var(--color-heading)' }}>
                   <Link href={`/clients/${s.id}`} className="hover:underline">
                     {s.first_name} {s.last_name}
                   </Link>
                 </td>
-                <td style={{ ...tdStyle, color: '#6b7280' }}>{s.email}</td>
+                <td style={{ ...tdStyle, color: 'var(--color-muted)' }}>{s.email}</td>
                 <td style={{ ...tdStyle, textAlign: 'center' }}>{s.purchase_count}</td>
                 <td style={{ ...tdStyle, textAlign: 'right', fontWeight: 600 }}>{fmt(s.total_spend)}</td>
               </tr>
@@ -284,17 +260,16 @@ function CategoryTable({ data }: { data: CategorySpender[] }) {
           <Link
             key={s.id}
             href={`/clients/${s.id}`}
-            className="block border border-[#e5e7eb] p-4"
-            style={{ borderRadius: 0 }}
+            className="card block p-4"
           >
-            <p className="font-semibold text-sm" style={{ color: '#1A2C4E' }}>
-              <span className="text-gray-400 font-normal mr-1">#{i + 1}</span>
+            <p className="font-semibold text-sm text-heading">
+              <span className="text-muted font-normal mr-1">#{i + 1}</span>
               {s.first_name} {s.last_name}
             </p>
-            <p className="text-gray-500 text-xs mt-0.5">{s.email}</p>
+            <p className="text-muted text-xs mt-0.5">{s.email}</p>
             <div className="flex justify-between items-center mt-2">
-              <span className="text-gray-500 text-xs">{s.purchase_count} purchases</span>
-              <span className="font-semibold text-sm" style={{ color: '#B8540A' }}>{fmt(s.total_spend)}</span>
+              <span className="text-muted text-xs">{s.purchase_count} purchases</span>
+              <span className="font-semibold text-sm" style={{ color: 'var(--accent)' }}>{fmt(s.total_spend)}</span>
             </div>
           </Link>
         ))}
@@ -329,17 +304,17 @@ function ByCategorySection({
   }
 
   return (
-    <>
-      <div className="flex justify-between items-center mt-8 mb-0">
-        <h2 style={{ fontSize: '18px', fontWeight: 700, color: '#1A2C4E' }}>Top Spenders by Category</h2>
-      </div>
+    <Collapsible title="Top Spenders by Category" defaultOpen>
       {sections.map(({ key, label }) => (
-        <div key={key}>
-          <SubHeading title={label} onExport={() => exportCategory(key)} />
+        <div key={key} className="mb-6 last:mb-0">
+          <div className="flex justify-between items-center mb-3">
+            <h3 className="text-sm font-semibold text-heading">{label}</h3>
+            <button onClick={() => exportCategory(key)} className="btn-secondary">Export CSV</button>
+          </div>
           <CategoryTable data={data[key]} />
         </div>
       ))}
-    </>
+    </Collapsible>
   )
 }
 
@@ -385,15 +360,17 @@ function RetreatsSection({ data }: { data: RetreatRow[] }) {
   }
 
   return (
-    <>
-      <SectionHeading title="Revenue by Retreat" onExport={exportCsv} />
+    <Collapsible title="Revenue by Retreat" defaultOpen>
+      <div className="flex justify-end mb-4">
+        <button onClick={exportCsv} className="btn-secondary">Export CSV</button>
+      </div>
       {data.length === 0 ? <Empty /> : (
         <>
           {/* Desktop table */}
           <div className="hidden md:block">
             <table className="w-full border-collapse">
               <thead>
-                <tr>
+                <tr className="bg-grey-subtle border-b border-card-border">
                   <th style={thStyle}>Retreat</th>
                   <th style={{ ...thStyle, textAlign: 'center' }}>Clients</th>
                   <th style={{ ...thStyle, textAlign: 'right' }}>Total Revenue</th>
@@ -405,9 +382,9 @@ function RetreatsSection({ data }: { data: RetreatRow[] }) {
                     const r = editions[0]
                     const label = r.year != null ? `${baseName} ${r.year}` : baseName
                     return (
-                      <tr key={baseName}>
-                        <td style={{ ...tdStyle, fontWeight: 500, color: '#1A2C4E' }}>{label}</td>
-                        <td style={{ ...tdStyle, textAlign: 'center', color: '#6b7280' }}>{r.client_count}</td>
+                      <tr key={baseName} className="hover:bg-grey-subtle">
+                        <td style={{ ...tdStyle, fontWeight: 500, color: 'var(--color-heading)' }}>{label}</td>
+                        <td style={{ ...tdStyle, textAlign: 'center', color: 'var(--color-muted)' }}>{r.client_count}</td>
                         <td style={{ ...tdStyle, textAlign: 'right', fontWeight: 600 }}>{fmt(r.total_revenue)}</td>
                       </tr>
                     )
@@ -416,20 +393,20 @@ function RetreatsSection({ data }: { data: RetreatRow[] }) {
                   const groupRevenue = editions.reduce((s, r) => s + r.total_revenue, 0)
                   return (
                     <Fragment key={baseName}>
-                      <tr style={{ background: '#f9fafb' }}>
-                        <td colSpan={3} style={{ ...tdStyle, fontWeight: 700, color: '#1A2C4E', fontSize: '13px' }}>{baseName}</td>
+                      <tr className="bg-grey-subtle">
+                        <td colSpan={3} style={{ ...tdStyle, fontWeight: 700, color: 'var(--color-heading)', fontSize: '13px' }}>{baseName}</td>
                       </tr>
                       {editions.map(r => (
-                        <tr key={`${baseName}-${r.year}`}>
+                        <tr key={`${baseName}-${r.year}`} className="hover:bg-grey-subtle">
                           <td style={{ ...tdStyle, paddingLeft: '24px', color: '#374151' }}>{r.year ?? '—'}</td>
-                          <td style={{ ...tdStyle, textAlign: 'center', color: '#6b7280' }}>{r.client_count}</td>
+                          <td style={{ ...tdStyle, textAlign: 'center', color: 'var(--color-muted)' }}>{r.client_count}</td>
                           <td style={{ ...tdStyle, textAlign: 'right', fontWeight: 600 }}>{fmt(r.total_revenue)}</td>
                         </tr>
                       ))}
                       <tr>
-                        <td style={{ ...tdStyle, background: '#f3f4f6', fontWeight: 700, color: '#1A2C4E' }}>Total</td>
-                        <td style={{ ...tdStyle, background: '#f3f4f6', textAlign: 'center', fontWeight: 700, color: '#1A2C4E' }}>{groupClients}</td>
-                        <td style={{ ...tdStyle, background: '#f3f4f6', textAlign: 'right', fontWeight: 700, color: '#1A2C4E' }}>{fmt(groupRevenue)}</td>
+                        <td style={{ ...tdStyle, background: 'var(--color-grey-subtle)', fontWeight: 700, color: 'var(--color-heading)' }}>Total</td>
+                        <td style={{ ...tdStyle, background: 'var(--color-grey-subtle)', textAlign: 'center', fontWeight: 700, color: 'var(--color-heading)' }}>{groupClients}</td>
+                        <td style={{ ...tdStyle, background: 'var(--color-grey-subtle)', textAlign: 'right', fontWeight: 700, color: 'var(--color-heading)' }}>{fmt(groupRevenue)}</td>
                       </tr>
                     </Fragment>
                   )
@@ -444,28 +421,28 @@ function RetreatsSection({ data }: { data: RetreatRow[] }) {
                 const r = editions[0]
                 const label = r.year != null ? `${baseName} ${r.year}` : baseName
                 return (
-                  <div key={baseName} className="border border-[#e5e7eb] p-4" style={{ borderRadius: 0 }}>
-                    <p className="font-semibold text-sm" style={{ color: '#1A2C4E' }}>{label}</p>
+                  <div key={baseName} className="card p-4">
+                    <p className="font-semibold text-sm text-heading">{label}</p>
                     <div className="flex justify-between items-center mt-2">
-                      <span className="text-gray-500 text-xs">{r.client_count} clients</span>
-                      <span className="font-semibold text-sm" style={{ color: '#B8540A' }}>{fmt(r.total_revenue)}</span>
+                      <span className="text-muted text-xs">{r.client_count} clients</span>
+                      <span className="font-semibold text-sm" style={{ color: 'var(--accent)' }}>{fmt(r.total_revenue)}</span>
                     </div>
                   </div>
                 )
               }
               const groupRevenue = editions.reduce((s, r) => s + r.total_revenue, 0)
               return (
-                <div key={baseName} className="border border-[#e5e7eb]" style={{ borderRadius: 0 }}>
-                  <div className="px-4 py-2" style={{ background: '#f9fafb', borderBottom: '1px solid #e5e7eb' }}>
-                    <p className="font-bold text-sm" style={{ color: '#1A2C4E' }}>{baseName}</p>
-                    <p className="text-xs text-gray-500 mt-0.5">{fmt(groupRevenue)} total</p>
+                <div key={baseName} className="card overflow-hidden">
+                  <div className="px-4 py-2 bg-grey-subtle border-b border-card-border">
+                    <p className="font-bold text-sm text-heading">{baseName}</p>
+                    <p className="text-xs text-muted mt-0.5">{fmt(groupRevenue)} total</p>
                   </div>
                   {editions.map(r => (
-                    <div key={`${baseName}-${r.year}`} className="flex justify-between items-center px-4 py-2 border-b border-[#f3f4f6] last:border-0">
-                      <span className="text-sm text-gray-600">{r.year ?? '—'}</span>
+                    <div key={`${baseName}-${r.year}`} className="flex justify-between items-center px-4 py-2 border-b border-card-border last:border-0">
+                      <span className="text-sm text-body">{r.year ?? '—'}</span>
                       <div className="flex gap-3 items-center">
-                        <span className="text-xs text-gray-400">{r.client_count} clients</span>
-                        <span className="text-sm font-semibold" style={{ color: '#B8540A' }}>{fmt(r.total_revenue)}</span>
+                        <span className="text-xs text-muted">{r.client_count} clients</span>
+                        <span className="text-sm font-semibold" style={{ color: 'var(--accent)' }}>{fmt(r.total_revenue)}</span>
                       </div>
                     </div>
                   ))}
@@ -475,7 +452,7 @@ function RetreatsSection({ data }: { data: RetreatRow[] }) {
           </div>
         </>
       )}
-    </>
+    </Collapsible>
   )
 }
 
@@ -501,10 +478,7 @@ function TrainingCohortsSection({ data }: { data: TrainingCohortRow[] }) {
   }
 
   return (
-    <>
-      <div className="flex justify-between items-center mt-8 mb-0">
-        <h2 style={{ fontSize: '18px', fontWeight: 700, color: '#1A2C4E' }}>Revenue by Training Programme</h2>
-      </div>
+    <Collapsible title="Revenue by Training Programme" defaultOpen>
       {TRAINING_PRODUCTS_ORDER.map(productName => {
         const rows = data.filter(r => r.product_name === productName)
 
@@ -520,12 +494,15 @@ function TrainingCohortsSection({ data }: { data: TrainingCohortRow[] }) {
         const grandRevenue = rows.reduce((s, r) => s + r.total_revenue, 0)
 
         return (
-          <div key={productName}>
-            <SubHeading title={productName} onExport={() => exportCsv(productName, rows)} />
+          <div key={productName} className="mb-6 last:mb-0">
+            <div className="flex justify-between items-center mb-3">
+              <h3 className="text-sm font-semibold text-heading">{productName}</h3>
+              <button onClick={() => exportCsv(productName, rows)} className="btn-secondary">Export CSV</button>
+            </div>
             {rows.length === 0 ? <Empty /> : (
               <table className="w-full border-collapse">
                 <thead>
-                  <tr>
+                  <tr className="bg-grey-subtle border-b border-card-border">
                     <th style={thStyle}>Cohort</th>
                     <th style={{ ...thStyle, textAlign: 'center' }}>Students</th>
                     <th style={{ ...thStyle, textAlign: 'right' }}>Revenue</th>
@@ -544,25 +521,25 @@ function TrainingCohortsSection({ data }: { data: TrainingCohortRow[] }) {
                               ? `${r.edition} ${r.cohort_year}`
                               : 'Unassigned'
                           return (
-                            <tr key={`${r.edition ?? ''}-${r.cohort_year ?? ''}`}>
+                            <tr key={`${r.edition ?? ''}-${r.cohort_year ?? ''}`} className="hover:bg-grey-subtle">
                               <td style={tdStyle}>{cohortLabel}</td>
-                              <td style={{ ...tdStyle, textAlign: 'center', color: '#6b7280' }}>{r.student_count}</td>
+                              <td style={{ ...tdStyle, textAlign: 'center', color: 'var(--color-muted)' }}>{r.student_count}</td>
                               <td style={{ ...tdStyle, textAlign: 'right', fontWeight: 600 }}>{fmt(r.total_revenue)}</td>
                             </tr>
                           )
                         })}
                         <tr>
-                          <td style={{ ...tdStyle, background: '#f3f4f6', fontWeight: 700, color: '#1A2C4E' }}>{yearLabel}</td>
-                          <td style={{ ...tdStyle, background: '#f3f4f6', textAlign: 'center', fontWeight: 700, color: '#1A2C4E' }}>{yearStudents}</td>
-                          <td style={{ ...tdStyle, background: '#f3f4f6', textAlign: 'right', fontWeight: 700, color: '#1A2C4E' }}>{fmt(yearRevenue)}</td>
+                          <td style={{ ...tdStyle, background: 'var(--color-grey-subtle)', fontWeight: 700, color: 'var(--color-heading)' }}>{yearLabel}</td>
+                          <td style={{ ...tdStyle, background: 'var(--color-grey-subtle)', textAlign: 'center', fontWeight: 700, color: 'var(--color-heading)' }}>{yearStudents}</td>
+                          <td style={{ ...tdStyle, background: 'var(--color-grey-subtle)', textAlign: 'right', fontWeight: 700, color: 'var(--color-heading)' }}>{fmt(yearRevenue)}</td>
                         </tr>
                       </Fragment>
                     )
                   })}
                   <tr>
-                    <td style={{ padding: '10px 0', fontSize: '14px', fontWeight: 700, background: '#1A2C4E', color: 'white', borderBottom: 'none' }}>Grand Total</td>
-                    <td style={{ padding: '10px 0', fontSize: '14px', fontWeight: 700, background: '#1A2C4E', color: 'white', textAlign: 'center', borderBottom: 'none' }}>{grandStudents}</td>
-                    <td style={{ padding: '10px 0', fontSize: '14px', fontWeight: 700, background: '#1A2C4E', color: 'white', textAlign: 'right', borderBottom: 'none' }}>{fmt(grandRevenue)}</td>
+                    <td style={{ fontSize: '14px', fontWeight: 600, background: 'var(--color-grey-subtle)', color: 'var(--color-heading)', borderTop: '2px solid var(--color-card-border)' }}>Grand Total</td>
+                    <td style={{ fontSize: '14px', fontWeight: 600, background: 'var(--color-grey-subtle)', color: 'var(--color-heading)', textAlign: 'center', borderTop: '2px solid var(--color-card-border)' }}>{grandStudents}</td>
+                    <td style={{ fontSize: '14px', fontWeight: 600, background: 'var(--color-grey-subtle)', color: 'var(--color-heading)', textAlign: 'right', borderTop: '2px solid var(--color-card-border)' }}>{fmt(grandRevenue)}</td>
                   </tr>
                 </tbody>
               </table>
@@ -570,7 +547,7 @@ function TrainingCohortsSection({ data }: { data: TrainingCohortRow[] }) {
           </div>
         )
       })}
-    </>
+    </Collapsible>
   )
 }
 
@@ -603,8 +580,10 @@ function InterestsSummarySection({ data }: { data: InterestSummaryRow[] }) {
   const orderedCategories = INTEREST_CATEGORY_ORDER.filter(c => grouped[c])
 
   return (
-    <>
-      <SectionHeading title="Interests Summary" onExport={exportCsv} />
+    <Collapsible title="Interests Summary" defaultOpen>
+      <div className="flex justify-end mb-4">
+        <button onClick={exportCsv} className="btn-secondary">Export CSV</button>
+      </div>
       <div className="flex items-center gap-2 mb-4">
         <input
           type="checkbox"
@@ -613,7 +592,7 @@ function InterestsSummarySection({ data }: { data: InterestSummaryRow[] }) {
           onChange={e => setShowZero(e.target.checked)}
           style={{ width: '16px', height: '16px', cursor: 'pointer', borderRadius: 0 }}
         />
-        <label htmlFor="show-zero-interests" className="text-sm text-gray-600" style={{ cursor: 'pointer' }}>
+        <label htmlFor="show-zero-interests" className="text-sm text-body" style={{ cursor: 'pointer' }}>
           Show products with zero interests
         </label>
       </div>
@@ -622,7 +601,7 @@ function InterestsSummarySection({ data }: { data: InterestSummaryRow[] }) {
         <div className="hidden md:block">
           <table className="w-full border-collapse">
             <thead>
-              <tr>
+              <tr className="bg-grey-subtle border-b border-card-border">
                 <th style={thStyle}>Product</th>
                 <th style={{ ...thStyle, textAlign: 'right' }}>Potential Buyers</th>
               </tr>
@@ -638,7 +617,7 @@ function InterestsSummarySection({ data }: { data: InterestSummaryRow[] }) {
                         colSpan={2}
                         style={{
                           ...tdStyle,
-                          background: '#f3f4f6',
+                          background: 'var(--color-grey-subtle)',
                           fontWeight: 600,
                           fontSize: '12px',
                           color: '#374151',
@@ -651,8 +630,8 @@ function InterestsSummarySection({ data }: { data: InterestSummaryRow[] }) {
                       </td>
                     </tr>
                     {rows.map(r => (
-                      <tr key={r.product_id}>
-                        <td style={{ ...tdStyle, color: '#1A2C4E', paddingLeft: '8px' }}>{r.product_name}</td>
+                      <tr key={r.product_id} className="hover:bg-grey-subtle">
+                        <td style={{ ...tdStyle, color: 'var(--color-heading)', paddingLeft: '8px' }}>{r.product_name}</td>
                         <td style={{ ...tdStyle, textAlign: 'right', fontWeight: r.count > 0 ? 600 : undefined, color: r.count === 0 ? '#9ca3af' : undefined }}>
                           {r.count}
                         </td>
@@ -675,16 +654,16 @@ function InterestsSummarySection({ data }: { data: InterestSummaryRow[] }) {
             return (
               <div key={cat}>
                 <p
-                  className="text-xs uppercase tracking-wide font-semibold mb-2 px-1"
-                  style={{ color: '#374151', background: '#f3f4f6', padding: '4px 8px' }}
+                  className="text-xs uppercase tracking-wide font-semibold mb-2 bg-grey-subtle"
+                  style={{ color: '#374151', padding: '4px 8px' }}
                 >
                   {categoryLabel(cat)}
                 </p>
                 <div className="space-y-1">
                   {rows.map(r => (
-                    <div key={r.product_id} className="flex justify-between items-center border border-[#e5e7eb] px-3 py-2" style={{ borderRadius: 0 }}>
-                      <span className="text-sm" style={{ color: '#1A2C4E' }}>{r.product_name}</span>
-                      <span className="text-sm font-semibold" style={{ color: r.count === 0 ? '#9ca3af' : '#1A2C4E' }}>{r.count}</span>
+                    <div key={r.product_id} className="card flex justify-between items-center px-3 py-2">
+                      <span className="text-sm text-heading">{r.product_name}</span>
+                      <span className="text-sm font-semibold" style={{ color: r.count === 0 ? '#9ca3af' : 'var(--color-heading)' }}>{r.count}</span>
                     </div>
                   ))}
                 </div>
@@ -693,7 +672,7 @@ function InterestsSummarySection({ data }: { data: InterestSummaryRow[] }) {
           })}
         </div>
       )}
-    </>
+    </Collapsible>
   )
 }
 
@@ -777,14 +756,7 @@ export default function ReportsPage() {
     setDateTo('')
   }
 
-  const inputStyle: React.CSSProperties = {
-    border: '1px solid #d1d5db',
-    padding: '8px 12px',
-    fontSize: '14px',
-    borderRadius: 0,
-    height: '40px',
-    outline: 'none',
-  }
+  const inputCls = 'border border-card-border rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:border-accent'
 
   if (loading) {
     return <LoadingSpinner message="Loading reports..." />
@@ -792,43 +764,38 @@ export default function ReportsPage() {
 
   return (
     <div className="px-4 md:px-6 pb-24">
-      {/* Page title */}
-      <h1 className="font-bold pt-6 mb-4" style={{ fontSize: '24px', color: '#1A2C4E' }}>
-        Reports
-      </h1>
+      <PageHeader title="Reports" />
 
       {/* Date range filter */}
-      <div className="flex flex-col md:flex-row gap-4 items-start md:items-end mb-6">
-        <div>
-          <p className="text-gray-500 text-xs mb-1">From</p>
-          <input
-            type="date"
-            value={dateFrom}
-            onChange={e => handleDateFrom(e.target.value)}
-            style={inputStyle}
-          />
+      <div className="card mb-6">
+        <div className="p-4 flex flex-col md:flex-row gap-4 items-start md:items-end">
+          <div>
+            <p className="text-muted text-xs mb-1">From</p>
+            <input
+              type="date"
+              value={dateFrom}
+              onChange={e => handleDateFrom(e.target.value)}
+              className={inputCls}
+              style={{ height: '40px' }}
+            />
+          </div>
+          <div>
+            <p className="text-muted text-xs mb-1">To</p>
+            <input
+              type="date"
+              value={dateTo}
+              onChange={e => handleDateTo(e.target.value)}
+              className={inputCls}
+              style={{ height: '40px' }}
+            />
+          </div>
+          {(dateFrom || dateTo) && (
+            <button onClick={handleClear} className="btn-secondary">
+              Clear
+            </button>
+          )}
         </div>
-        <div>
-          <p className="text-gray-500 text-xs mb-1">To</p>
-          <input
-            type="date"
-            value={dateTo}
-            onChange={e => handleDateTo(e.target.value)}
-            style={inputStyle}
-          />
-        </div>
-        {(dateFrom || dateTo) && (
-          <button onClick={handleClear} className="btn-secondary">
-            Clear
-          </button>
-        )}
       </div>
-
-      {loading && (
-        <div className="flex items-center justify-center min-h-[40vh]">
-          <p className="text-gray-500">Loading reports...</p>
-        </div>
-      )}
 
       {error && (
         <div className="flex items-center justify-center min-h-[40vh]">
@@ -837,20 +804,24 @@ export default function ReportsPage() {
       )}
 
       {!loading && !error && data && (
-        <>
+        <div className="space-y-4">
           <RevenueSummaryBlock data={data.revenueByEntity} />
           <TopSpendersSection data={data.topSpenders} />
           <ByCategorySection data={data.byCategory} />
           <RetreatsSection data={data.retreats} />
-        </>
+        </div>
       )}
 
       {!trainingCohortsLoading && (
-        <TrainingCohortsSection data={trainingCohorts} />
+        <div className="mt-4">
+          <TrainingCohortsSection data={trainingCohorts} />
+        </div>
       )}
 
       {!interestsSummaryLoading && (
-        <InterestsSummarySection data={interestsSummary} />
+        <div className="mt-4">
+          <InterestsSummarySection data={interestsSummary} />
+        </div>
       )}
     </div>
   )
