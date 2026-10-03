@@ -238,7 +238,7 @@ export default function ProductsPage() {
   function renderEditRow(p: Product) {
     return (
       <tr key={p.id} className="border-b border-card-border" style={{ background: '#fffbf0' }}>
-        <td className="px-4 py-2">
+        <td>
           <input
             type="text"
             value={editForm.name}
@@ -248,7 +248,7 @@ export default function ProductsPage() {
           />
           {editError && <p className="text-red-500 text-xs mt-1">{editError}</p>}
         </td>
-        <td className="px-4 py-2">
+        <td>
           <select
             value={editForm.category}
             onChange={e => setEditForm(f => ({ ...f, category: e.target.value }))}
@@ -268,8 +268,8 @@ export default function ProductsPage() {
             ))}
           </select>
         </td>
-        <td className="px-4 py-2 hidden md:table-cell"></td>
-        <td className="px-4 py-2">
+        <td className="hidden md:table-cell"></td>
+        <td>
           <div className="flex gap-2">
             <button onClick={() => handleEditSave(p.id)} disabled={editSaving} className="btn-primary">
               {editSaving ? 'Saving...' : 'Save'}
@@ -286,14 +286,14 @@ export default function ProductsPage() {
   function renderDisplayRow(p: Product, linkLabel?: string) {
     return (
       <tr key={p.id} className="border-b border-card-border hover:bg-grey-subtle">
-        <td className="px-4 py-3 text-sm font-medium text-heading">
+        <td className="text-sm font-medium text-heading">
           <Link href={`/products/${p.id}`} className="hover:underline">{linkLabel ?? p.name}</Link>
         </td>
-        <td className="px-4 py-3">
+        <td>
           <span style={{ background: 'var(--color-grey-subtle)', color: '#374151', padding: '2px 6px', fontSize: '11px', fontWeight: 500, borderRadius: '4px' }}>{entityAbbr(p.entity)}</span>
         </td>
-        <td className="px-4 py-3 text-sm text-muted hidden md:table-cell">{formatDate(p.created_at)}</td>
-        <td className="px-4 py-3">
+        <td className="text-sm text-muted hidden md:table-cell">{formatDate(p.created_at)}</td>
+        <td>
           <div className="flex items-center gap-1 justify-end">
             <button onClick={() => startEdit(p)} style={iconBtnStyle} title="Edit">
               <Edit2 size={14} />
@@ -469,7 +469,7 @@ export default function ProductsPage() {
                         {Array.from(groupMap.entries()).map(([baseName, items]) => (
                           <Fragment key={baseName}>
                             <tr className="bg-grey-subtle border-b border-card-border">
-                              <td colSpan={4} className="px-4 py-2 text-xs font-semibold text-muted">
+                              <td colSpan={4} className="text-xs font-semibold text-muted">
                                 {baseName}
                               </td>
                             </tr>
@@ -535,12 +535,12 @@ export default function ProductsPage() {
                 <tbody>
                   {archived.map(p => (
                     <tr key={p.id} className="border-b border-card-border">
-                      <td className="px-4 py-3 text-sm text-muted">{p.name}</td>
-                      <td className="px-4 py-3 text-sm text-muted">{p.category}</td>
-                      <td className="px-4 py-3">
+                      <td className="text-sm text-muted">{p.name}</td>
+                      <td className="text-sm text-muted">{p.category}</td>
+                      <td>
                         <span style={{ background: 'var(--color-grey-subtle)', color: '#374151', padding: '2px 6px', fontSize: '11px', fontWeight: 500, borderRadius: '4px' }}>{entityAbbr(p.entity)}</span>
                       </td>
-                      <td className="px-4 py-3 text-right">
+                      <td className="text-right">
                         <button onClick={() => handleArchive(p.id, false)} className="btn-secondary text-xs">
                           <ArchiveRestore size={12} />
                           Unarchive

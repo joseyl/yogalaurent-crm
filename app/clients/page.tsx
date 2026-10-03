@@ -182,7 +182,7 @@ export default function ClientsPage() {
   }
 
   const inputCls = 'border border-card-border rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:border-accent'
-  const thCls = 'text-left text-xs font-medium text-muted uppercase tracking-wide py-3 px-4'
+  const thCls = 'text-left text-xs font-medium text-muted uppercase tracking-wide'
 
   return (
     <div>
@@ -282,7 +282,7 @@ export default function ClientsPage() {
             <thead>
               <tr className="bg-grey-subtle border-b border-card-border">
                 <th
-                  className={`${thCls} pl-5 cursor-pointer select-none whitespace-nowrap`}
+                  className={`${thCls} cursor-pointer select-none whitespace-nowrap`}
                   onClick={() => handleSort('last_name')}
                 >
                   Name <SortArrow field="last_name" sortField={sortField} sortDirection={sortDirection} />
@@ -297,7 +297,7 @@ export default function ClientsPage() {
                   Total Spend <SortArrow field="total_spend" sortField={sortField} sortDirection={sortDirection} />
                 </th>
                 <th
-                  className={`${thCls} cursor-pointer select-none whitespace-nowrap pr-5`}
+                  className={`${thCls} cursor-pointer select-none whitespace-nowrap`}
                   onClick={() => handleSort('last_purchase_date')}
                 >
                   Last Purchase <SortArrow field="last_purchase_date" sortField={sortField} sortDirection={sortDirection} />
@@ -311,13 +311,13 @@ export default function ClientsPage() {
                   className="border-b border-card-border hover:bg-grey-subtle cursor-pointer transition-colors"
                   onClick={() => router.push(`/clients/${client.id}`)}
                 >
-                  <td className="py-3 pl-5 pr-4 font-medium text-heading">{client.first_name} {client.last_name}</td>
-                  <td className="py-3 px-4 text-muted text-sm">{client.email}</td>
-                  <td className="py-3 px-4"><StatusBadge status={client.status} /></td>
-                  <td className="py-3 px-4 text-muted text-sm max-w-[140px] truncate">{client.source_channel ?? '—'}</td>
-                  <td className="py-3 px-4 text-sm text-body">{client.assigned_to}</td>
-                  <td className="py-3 px-4 text-sm text-right font-medium text-heading">{formatCurrency(client.total_spend)}</td>
-                  <td className="py-3 pl-4 pr-5 text-muted text-sm">{formatDate(client.last_purchase_date)}</td>
+                  <td className="font-medium text-heading">{client.first_name} {client.last_name}</td>
+                  <td className="text-muted text-sm">{client.email}</td>
+                  <td><StatusBadge status={client.status} /></td>
+                  <td className="text-muted text-sm max-w-[140px] truncate">{client.source_channel ?? '—'}</td>
+                  <td className="text-sm text-body">{client.assigned_to}</td>
+                  <td className="text-sm text-right font-medium text-heading">{formatCurrency(client.total_spend)}</td>
+                  <td className="text-muted text-sm">{formatDate(client.last_purchase_date)}</td>
                 </tr>
               ))}
             </tbody>

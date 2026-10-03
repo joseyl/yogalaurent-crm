@@ -916,16 +916,16 @@ export default function ClientTabs({ personId, purchases, attendance, leads, pro
                     <thead>
                       <tr className="bg-grey-subtle">
                         {['Date', 'Class Name', 'Pass Used'].map(h => (
-                          <th key={h} className="text-left uppercase tracking-wide px-3 py-2.5 pr-4 text-[11px] text-muted first:rounded-tl-lg last:rounded-tr-lg">{h}</th>
+                          <th key={h} className="text-left uppercase tracking-wide text-[11px] text-muted first:rounded-tl-lg last:rounded-tr-lg">{h}</th>
                         ))}
                       </tr>
                     </thead>
                     <tbody>
                       {attendance.map(a => (
                         <tr key={a.id} className="border-b border-card-border hover:bg-grey-subtle transition-colors">
-                          <td className="py-3 px-3 pr-4 text-sm text-muted">{formatDate(a.class_date)}</td>
-                          <td className="py-3 px-3 pr-4 text-sm font-medium text-heading">{a.class_name}</td>
-                          <td className="py-3 px-3 text-sm text-muted">{a.pass_used ?? '—'}</td>
+                          <td className="text-sm text-muted">{formatDate(a.class_date)}</td>
+                          <td className="text-sm font-medium text-heading">{a.class_name}</td>
+                          <td className="text-sm text-muted">{a.pass_used ?? '—'}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -958,19 +958,19 @@ export default function ClientTabs({ personId, purchases, attendance, leads, pro
                     <thead>
                       <tr className="bg-grey-subtle">
                         {['Date Added', 'Product', 'Status', 'Assigned To', 'Last Follow-up', 'Notes'].map(h => (
-                          <th key={h} className="text-left uppercase tracking-wide px-3 py-2.5 pr-4 text-[11px] text-muted first:rounded-tl-lg last:rounded-tr-lg">{h}</th>
+                          <th key={h} className="text-left uppercase tracking-wide text-[11px] text-muted first:rounded-tl-lg last:rounded-tr-lg">{h}</th>
                         ))}
                       </tr>
                     </thead>
                     <tbody>
                       {leads.map(l => (
                         <tr key={l.id} className="border-b border-card-border hover:bg-grey-subtle transition-colors">
-                          <td className="py-3 px-3 pr-4 text-sm text-muted">{formatDate(l.date_added)}</td>
-                          <td className="py-3 px-3 pr-4 text-sm font-medium text-heading">{l.product_name ?? '—'}</td>
-                          <td className="py-3 px-3 pr-4"><StatusBadge status={l.status} type="lead" /></td>
-                          <td className="py-3 px-3 pr-4 text-sm text-body">{l.assigned_to}</td>
-                          <td className="py-3 px-3 pr-4 text-sm text-muted">{formatDate(l.last_followup_date)}</td>
-                          <td className="py-3 px-3 text-sm text-muted">{l.notes ?? '—'}</td>
+                          <td className="text-sm text-muted">{formatDate(l.date_added)}</td>
+                          <td className="text-sm font-medium text-heading">{l.product_name ?? '—'}</td>
+                          <td><StatusBadge status={l.status} type="lead" /></td>
+                          <td className="text-sm text-body">{l.assigned_to}</td>
+                          <td className="text-sm text-muted">{formatDate(l.last_followup_date)}</td>
+                          <td className="text-sm text-muted">{l.notes ?? '—'}</td>
                         </tr>
                       ))}
                     </tbody>

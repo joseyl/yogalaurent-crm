@@ -77,7 +77,7 @@ export default function LeadsPage() {
   }
 
   const inputCls = 'border border-card-border rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:border-accent'
-  const thCls = 'text-left text-xs font-medium text-muted uppercase tracking-wide py-3 px-4'
+  const thCls = 'text-left text-xs font-medium text-muted uppercase tracking-wide'
 
   return (
     <div>
@@ -132,10 +132,10 @@ export default function LeadsPage() {
           <table className="w-full border-collapse">
             <thead>
               <tr className="bg-grey-subtle border-b border-card-border">
-                {['Name', 'Email', 'Product of Interest', 'Status', 'Assigned To', 'Days Since Follow-up'].map((h, i) => (
+                {['Name', 'Email', 'Product of Interest', 'Status', 'Assigned To', 'Days Since Follow-up'].map(h => (
                   <th
                     key={h}
-                    className={`${thCls} whitespace-nowrap ${i === 0 ? 'pl-5' : ''}`}
+                    className={`${thCls} whitespace-nowrap`}
                   >
                     {h}
                   </th>
@@ -149,12 +149,12 @@ export default function LeadsPage() {
                   className="border-b border-card-border hover:bg-grey-subtle cursor-pointer transition-colors"
                   onClick={() => router.push(`/leads/${lead.id}`)}
                 >
-                  <td className="py-3 pl-5 pr-4 font-medium text-heading">{lead.first_name} {lead.last_name}</td>
-                  <td className="py-3 px-4 text-muted text-sm">{lead.email}</td>
-                  <td className="py-3 px-4 text-muted text-sm">{lead.product_name ?? '—'}</td>
-                  <td className="py-3 px-4"><StatusBadge status={lead.status} type="lead" /></td>
-                  <td className="py-3 px-4 text-sm text-body">{lead.assigned_to}</td>
-                  <td className="py-3 px-4 text-sm">
+                  <td className="font-medium text-heading">{lead.first_name} {lead.last_name}</td>
+                  <td className="text-muted text-sm">{lead.email}</td>
+                  <td className="text-muted text-sm">{lead.product_name ?? '—'}</td>
+                  <td><StatusBadge status={lead.status} type="lead" /></td>
+                  <td className="text-sm text-body">{lead.assigned_to}</td>
+                  <td className="text-sm">
                     <Badge tone={lead.days_since_followup >= 7 ? 'red' : 'grey'}>{lead.days_since_followup}d</Badge>
                   </td>
                 </tr>

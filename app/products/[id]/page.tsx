@@ -129,7 +129,7 @@ export default async function ProductDetailPage({ params }: Props) {
                     {['Name', 'Email', 'Status', 'Assigned To', 'Source', 'Date Added'].map(h => (
                       <th
                         key={h}
-                        className="text-left uppercase tracking-wide pb-3 pr-4 text-muted"
+                        className="text-left uppercase tracking-wide text-muted"
                         style={{ fontSize: '11px' }}
                       >
                         {h}
@@ -140,18 +140,18 @@ export default async function ProductDetailPage({ params }: Props) {
                 <tbody>
                   {potentialBuyers.map(b => (
                     <tr key={b.id} className="border-b border-card-border hover:bg-grey-subtle">
-                      <td className="py-3 pr-4 font-medium text-heading">
+                      <td className="font-medium text-heading">
                         <Link href={`/clients/${b.person_id}`} className="hover:underline">
                           {b.first_name} {b.last_name}
                         </Link>
                       </td>
-                      <td className="py-3 pr-4 text-sm text-muted">{b.email}</td>
-                      <td className="py-3 pr-4">
+                      <td className="text-sm text-muted">{b.email}</td>
+                      <td>
                         <StatusBadge status={b.status} />
                       </td>
-                      <td className="py-3 pr-4 text-sm text-muted">{b.assigned_to ?? '—'}</td>
-                      <td className="py-3 pr-4 text-sm text-muted">{b.source ?? '—'}</td>
-                      <td className="py-3 text-sm text-muted whitespace-nowrap">{formatDate(b.added_date)}</td>
+                      <td className="text-sm text-muted">{b.assigned_to ?? '—'}</td>
+                      <td className="text-sm text-muted">{b.source ?? '—'}</td>
+                      <td className="text-sm text-muted whitespace-nowrap">{formatDate(b.added_date)}</td>
                     </tr>
                   ))}
                 </tbody>

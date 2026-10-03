@@ -116,7 +116,7 @@ export default function ProductPurchasesList({ purchases, category }: Props) {
                   {['Client', 'Date', 'Amount', 'Notes'].map(h => (
                     <th
                       key={h}
-                      className="text-left uppercase tracking-wide pb-3 pr-4 text-muted"
+                      className="text-left uppercase tracking-wide text-muted"
                       style={{ fontSize: '11px' }}
                     >
                       {h}
@@ -127,7 +127,7 @@ export default function ProductPurchasesList({ purchases, category }: Props) {
               <tbody>
                 {filteredPurchases.map(p => (
                   <tr key={p.id} className="border-b border-card-border hover:bg-grey-subtle">
-                    <td className="py-3 pr-4 font-medium text-heading">
+                    <td className="font-medium text-heading">
                       {p.person_id ? (
                         <Link href={`/clients/${p.person_id}`} className="hover:underline">
                           {p.first_name} {p.last_name}
@@ -136,16 +136,16 @@ export default function ProductPurchasesList({ purchases, category }: Props) {
                         <span style={{ color: '#9ca3af' }}>Unknown</span>
                       )}
                     </td>
-                    <td className="py-3 pr-4 text-sm text-gray-500 whitespace-nowrap">
+                    <td className="text-sm text-gray-500 whitespace-nowrap">
                       {formatDate(p.purchase_date)}
                     </td>
                     <td
-                      className="py-3 pr-4 text-sm text-right whitespace-nowrap"
+                      className="text-sm text-right whitespace-nowrap"
                       style={{ color: p.amount_gbp === 0 ? '#9ca3af' : undefined }}
                     >
                       {formatGBP(p.amount_gbp)}
                     </td>
-                    <td className="py-3 text-sm text-gray-500">{p.notes ?? '—'}</td>
+                    <td className="text-sm text-gray-500">{p.notes ?? '—'}</td>
                   </tr>
                 ))}
               </tbody>

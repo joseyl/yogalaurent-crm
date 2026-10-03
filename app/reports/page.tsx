@@ -91,13 +91,11 @@ const thStyle: React.CSSProperties = {
   color: 'var(--color-muted)',
   textTransform: 'uppercase',
   letterSpacing: '0.05em',
-  paddingBottom: '10px',
   textAlign: 'left',
   fontWeight: 500,
 }
 
 const tdStyle: React.CSSProperties = {
-  padding: '10px 0',
   fontSize: '14px',
   borderBottom: '1px solid var(--color-card-border)',
   verticalAlign: 'middle',
@@ -539,9 +537,9 @@ function TrainingCohortsSection({ data }: { data: TrainingCohortRow[] }) {
                     )
                   })}
                   <tr>
-                    <td style={{ padding: '10px 0', fontSize: '14px', fontWeight: 700, background: 'var(--color-heading)', color: 'white', borderBottom: 'none' }}>Grand Total</td>
-                    <td style={{ padding: '10px 0', fontSize: '14px', fontWeight: 700, background: 'var(--color-heading)', color: 'white', textAlign: 'center', borderBottom: 'none' }}>{grandStudents}</td>
-                    <td style={{ padding: '10px 0', fontSize: '14px', fontWeight: 700, background: 'var(--color-heading)', color: 'white', textAlign: 'right', borderBottom: 'none' }}>{fmt(grandRevenue)}</td>
+                    <td style={{ fontSize: '14px', fontWeight: 600, background: 'var(--color-grey-subtle)', color: 'var(--color-heading)', borderTop: '2px solid var(--color-card-border)' }}>Grand Total</td>
+                    <td style={{ fontSize: '14px', fontWeight: 600, background: 'var(--color-grey-subtle)', color: 'var(--color-heading)', textAlign: 'center', borderTop: '2px solid var(--color-card-border)' }}>{grandStudents}</td>
+                    <td style={{ fontSize: '14px', fontWeight: 600, background: 'var(--color-grey-subtle)', color: 'var(--color-heading)', textAlign: 'right', borderTop: '2px solid var(--color-card-border)' }}>{fmt(grandRevenue)}</td>
                   </tr>
                 </tbody>
               </table>
