@@ -6,12 +6,14 @@ import {
   Bar,
   XAxis,
   YAxis,
+  CartesianGrid,
   LineChart,
   Line,
   Legend,
   Tooltip,
 } from 'recharts'
 import { formatGBP } from '@/lib/utils'
+import Collapsible from '@/components/ui/Collapsible'
 
 interface CategoryRevenue {
   category: string
@@ -29,38 +31,71 @@ interface Props {
   trend: TrendEntry[]
 }
 
+const tooltipStyle = {
+  borderRadius: '8px',
+  border: '1px solid #E4E7EC',
+  boxShadow: '0 4px 6px rgba(16, 24, 40, 0.08)',
+  fontSize: '12px',
+  padding: '8px 12px',
+}
+
+const axisTickStyle = { fontSize: 11, fill: '#667085' }
+
 export default function DashboardCharts({ categoryRevenue, trend }: Props) {
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 px-4 mt-6">
-      <div className="border border-[#e5e7eb] bg-white p-4">
-        <h2 className="font-semibold text-sm mb-4" style={{ color: '#1A2C4E' }}>
-          Revenue This Month by Category
-        </h2>
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <Collapsible title="Revenue This Month by Category" defaultOpen>
         <ResponsiveContainer width="100%" height={280}>
           <BarChart data={categoryRevenue} margin={{ top: 4, right: 8, left: 8, bottom: 4 }}>
-            <XAxis dataKey="category" tick={{ fontSize: 11 }} />
-            <YAxis tickFormatter={(v: number) => formatGBP(v)} tick={{ fontSize: 11 }} />
-            <Tooltip formatter={(v) => [formatGBP(Number(v)), 'Revenue']} />
-            <Bar dataKey="total" fill="#1A2C4E" />
+            <CartesianGrid strokeDasharray="3 3" stroke="#F2F4F7" vertical={false} />
+            <XAxis
+              dataKey="category"
+              tick={axisTickStyle}
+              axisLine={false}
+              tickLine={false}
+            />
+            <YAxis
+              tickFormatter={(v: number) => formatGBP(v)}
+              tick={axisTickStyle}
+              axisLine={false}
+              tickLine={false}
+              width={72}
+            />
+            <Tooltip
+              formatter={(v) => [formatGBP(Number(v)), 'Revenue']}
+              contentStyle={tooltipStyle}
+              cursor={{ fill: '#F5F6F8' }}
+            />
+            <Bar dataKey="total" fill="#0E7C86" radius={4} />
           </BarChart>
         </ResponsiveContainer>
-      </div>
+      </Collapsible>
 
-      <div className="border border-[#e5e7eb] bg-white p-4">
-        <h2 className="font-semibold text-sm mb-4" style={{ color: '#1A2C4E' }}>
-          New Clients vs Leads (12 months)
-        </h2>
+      <Collapsible title="New Clients vs Leads (12 months)" defaultOpen>
         <ResponsiveContainer width="100%" height={280}>
           <LineChart data={trend} margin={{ top: 4, right: 8, left: 8, bottom: 4 }}>
-            <XAxis dataKey="month" tick={{ fontSize: 10 }} />
-            <YAxis tick={{ fontSize: 11 }} />
-            <Tooltip />
-            <Legend />
+            <CartesianGrid strokeDasharray="3 3" stroke="#F2F4F7" vertical={false} />
+            <XAxis
+              dataKey="month"
+              tick={{ fontSize: 10, fill: '#667085' }}
+              axisLine={false}
+              tickLine={false}
+              interval="preserveStartEnd"
+            />
+            <YAxis
+              tick={axisTickStyle}
+              axisLine={false}
+              tickLine={false}
+            />
+            <Tooltip contentStyle={tooltipStyle} />
+            <Legend
+              wrapperStyle={{ fontSize: '12px', color: '#667085' }}
+            />
             <Line
               type="monotone"
               dataKey="new_clients"
               name="Clients"
-              stroke="#1A2C4E"
+              stroke="#0E7C86"
               strokeWidth={2}
               dot={false}
             />
@@ -68,13 +103,13 @@ export default function DashboardCharts({ categoryRevenue, trend }: Props) {
               type="monotone"
               dataKey="new_leads"
               name="Leads"
-              stroke="#B8540A"
+              stroke="#667085"
               strokeWidth={2}
               dot={false}
             />
           </LineChart>
         </ResponsiveContainer>
-      </div>
+      </Collapsible>
     </div>
   )
 }

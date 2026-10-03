@@ -1,18 +1,7 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
 import { ClerkProvider } from "@clerk/nextjs";
 import Nav from "@/components/Nav";
 import "./globals.css";
-
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
 
 export const metadata: Metadata = {
   title: "Yogalaurent CRM",
@@ -26,14 +15,11 @@ export default function RootLayout({
 }>) {
   return (
     <ClerkProvider>
-      <html
-        lang="en"
-        className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
-      >
-        <body className="min-h-full flex flex-col">
-          <div className="min-h-screen bg-white flex">
-            <Nav />
-            <div className="flex-1 md:ml-[240px] pb-16 md:pb-0">
+      <html lang="en" className="h-full antialiased">
+        <body className="min-h-full">
+          <Nav />
+          <div className="md:ml-[240px] pb-20 md:pb-0 min-h-screen">
+            <div className="max-w-[1280px] mx-auto px-4 md:px-8 py-4 md:py-6">
               {children}
             </div>
           </div>

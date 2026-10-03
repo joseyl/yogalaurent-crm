@@ -2,21 +2,83 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { LayoutDashboard, Users, Target, BarChart3, Package, MoreHorizontal } from 'lucide-react'
+
+function IconDashboard() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="3" y="3" width="7" height="7" rx="1" />
+      <rect x="14" y="3" width="7" height="7" rx="1" />
+      <rect x="3" y="14" width="7" height="7" rx="1" />
+      <rect x="14" y="14" width="7" height="7" rx="1" />
+    </svg>
+  )
+}
+
+function IconUsers() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+      <circle cx="9" cy="7" r="4" />
+      <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+      <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+    </svg>
+  )
+}
+
+function IconTarget() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <circle cx="12" cy="12" r="10" />
+      <circle cx="12" cy="12" r="6" />
+      <circle cx="12" cy="12" r="2" />
+    </svg>
+  )
+}
+
+function IconBarChart() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <line x1="18" y1="20" x2="18" y2="10" />
+      <line x1="12" y1="20" x2="12" y2="4" />
+      <line x1="6" y1="20" x2="6" y2="14" />
+      <line x1="2" y1="20" x2="22" y2="20" />
+    </svg>
+  )
+}
+
+function IconPackage() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+      <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
+      <line x1="12" y1="22.08" x2="12" y2="12" />
+    </svg>
+  )
+}
+
+function IconMore() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <circle cx="12" cy="12" r="1.2" fill="currentColor" stroke="none" />
+      <circle cx="19" cy="12" r="1.2" fill="currentColor" stroke="none" />
+      <circle cx="5" cy="12" r="1.2" fill="currentColor" stroke="none" />
+    </svg>
+  )
+}
 
 const desktopNavItems = [
-  { label: 'Dashboard', href: '/', icon: <LayoutDashboard size={22} /> },
-  { label: 'Clients',   href: '/clients',   icon: <Users size={22} /> },
-  { label: 'Leads',     href: '/leads',     icon: <Target size={22} /> },
-  { label: 'Reports',   href: '/reports',   icon: <BarChart3 size={22} /> },
-  { label: 'Products',  href: '/products',  icon: <Package size={22} /> },
+  { label: 'Dashboard', href: '/',        icon: <IconDashboard /> },
+  { label: 'Clients',   href: '/clients', icon: <IconUsers /> },
+  { label: 'Leads',     href: '/leads',   icon: <IconTarget /> },
+  { label: 'Reports',   href: '/reports', icon: <IconBarChart /> },
+  { label: 'Products',  href: '/products', icon: <IconPackage /> },
 ]
 
 const mobileNavItems = [
-  { label: 'Dashboard', href: '/',       icon: <LayoutDashboard size={22} /> },
-  { label: 'Clients',   href: '/clients', icon: <Users size={22} /> },
-  { label: 'Leads',     href: '/leads',   icon: <Target size={22} /> },
-  { label: 'More',      href: '/more',    icon: <MoreHorizontal size={22} /> },
+  { label: 'Dashboard', href: '/',        icon: <IconDashboard /> },
+  { label: 'Clients',   href: '/clients', icon: <IconUsers /> },
+  { label: 'Leads',     href: '/leads',   icon: <IconTarget /> },
+  { label: 'More',      href: '/more',    icon: <IconMore /> },
 ]
 
 export default function Nav() {
@@ -31,27 +93,32 @@ export default function Nav() {
     <>
       {/* Desktop sidebar */}
       <nav
-        className="hidden md:flex fixed left-0 top-0 h-full w-[240px] flex-col z-50"
-        style={{ background: 'linear-gradient(to bottom, #1A2C4E, #2A4A7A)' }}
+        className="hidden md:flex fixed left-0 top-0 h-full w-[240px] flex-col z-50 bg-white"
+        style={{ borderRight: '1px solid var(--color-card-border)' }}
       >
-        <div className="px-6 py-6">
-          <p className="text-white text-xl font-bold leading-tight">CRM</p>
-          <p className="text-white text-sm font-normal leading-snug">Laurent Roure</p>
-          <p className="text-white text-sm font-normal leading-snug">Terra Training Ltd</p>
+        {/* Logo */}
+        <div className="px-5 py-5 border-b border-card-border">
+          <p className="text-base font-bold text-heading leading-tight">CRM</p>
+          <p className="text-sm text-body leading-snug">Laurent Roure</p>
+          <p className="text-sm text-body leading-snug">Terra Training Ltd</p>
         </div>
-        <div className="flex flex-col">
+
+        {/* Nav items */}
+        <div className="flex flex-col gap-0.5 p-2 mt-1">
           {desktopNavItems.map(item => {
             const active = isActive(item.href)
             return (
               <Link
                 key={item.href}
                 href={item.href}
-                className={`flex items-center gap-3 px-4 h-12 transition-colors ${
-                  active ? 'bg-white/20 text-white border-l-2 border-white' : 'text-white/75 hover:text-white hover:bg-white/10'
+                className={`flex items-center gap-3 rounded-lg px-3 h-11 text-sm font-medium transition-colors ${
+                  active
+                    ? 'bg-accent-tint text-accent'
+                    : 'text-body hover:bg-grey-subtle hover:text-heading'
                 }`}
               >
                 <span className="flex-shrink-0">{item.icon}</span>
-                <span className="text-sm font-medium">{item.label}</span>
+                {item.label}
               </Link>
             )
           })}
@@ -60,25 +127,25 @@ export default function Nav() {
 
       {/* Mobile bottom tab bar */}
       <nav
-        className="flex md:hidden fixed bottom-0 left-0 right-0 w-full z-50"
+        className="flex md:hidden fixed bottom-0 left-0 right-0 w-full z-50 bg-white"
         style={{
-          background: '#1A2C4E',
-          height: '64px',
+          borderTop: '1px solid var(--color-card-border)',
           paddingBottom: 'env(safe-area-inset-bottom)',
         }}
       >
-        <div className="flex justify-around items-center w-full h-full">
+        <div className="flex w-full">
           {mobileNavItems.map(item => {
             const active = isActive(item.href)
             return (
               <Link
                 key={item.href}
                 href={item.href}
-                className="flex flex-col items-center justify-center flex-1 h-full"
-                style={{ color: active ? '#B8540A' : 'rgba(255,255,255,0.7)' }}
+                className={`flex flex-1 flex-col items-center justify-center gap-0.5 py-2 text-xs font-medium transition-colors ${
+                  active ? 'text-accent' : 'text-muted'
+                }`}
               >
                 <span className="flex-shrink-0">{item.icon}</span>
-                <span style={{ fontSize: '11px', marginTop: '4px' }}>{item.label}</span>
+                {item.label}
               </Link>
             )
           })}

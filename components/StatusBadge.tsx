@@ -4,40 +4,41 @@ interface StatusBadgeProps {
 }
 
 const personConfig: Record<string, { bg: string; text: string; label: string }> = {
-  client:   { bg: '#dcfce7', text: '#166534', label: 'Client' },
-  lead:     { bg: '#fef9c3', text: '#854d0e', label: 'Lead' },
-  inactive: { bg: '#f3f4f6', text: '#6b7280', label: 'Inactive' },
-  deceased: { bg: '#fee2e2', text: '#991b1b', label: 'Deceased' },
-  classes:  { bg: '#f3f4f6', text: '#6b7280', label: 'Classes' },
-  training: { bg: '#f3f4f6', text: '#6b7280', label: 'Training' },
-  retreat:  { bg: '#f3f4f6', text: '#6b7280', label: 'Retreat' },
-  workshop: { bg: '#f3f4f6', text: '#6b7280', label: 'In-person Workshop' },
-  private:  { bg: '#f3f4f6', text: '#6b7280', label: 'Private' },
-  other:    { bg: '#f3f4f6', text: '#6b7280', label: 'Other' },
+  client:   { bg: '#ECFDF3', text: '#12B76A', label: 'Client' },
+  lead:     { bg: '#FFFAEB', text: '#F79009', label: 'Lead' },
+  inactive: { bg: '#F2F4F7', text: '#667085', label: 'Inactive' },
+  deceased: { bg: '#FEF3F2', text: '#F04438', label: 'Deceased' },
+  classes:  { bg: '#F2F4F7', text: '#667085', label: 'Classes' },
+  training: { bg: '#F2F4F7', text: '#667085', label: 'Training' },
+  retreat:  { bg: '#F2F4F7', text: '#667085', label: 'Retreat' },
+  workshop: { bg: '#F2F4F7', text: '#667085', label: 'In-person Workshop' },
+  private:  { bg: '#F2F4F7', text: '#667085', label: 'Private' },
+  other:    { bg: '#F2F4F7', text: '#667085', label: 'Other' },
 }
 
 const leadConfig: Record<string, { bg: string; text: string; label: string }> = {
-  new:       { bg: '#dbeafe', text: '#1e40af', label: 'New' },
-  contacted: { bg: '#fef9c3', text: '#854d0e', label: 'Contacted' },
-  quoted:    { bg: '#ede9fe', text: '#5b21b6', label: 'Quoted' },
-  converted: { bg: '#dcfce7', text: '#166534', label: 'Converted' },
-  dead:      { bg: '#f3f4f6', text: '#6b7280', label: 'Dead' },
+  new:       { bg: '#EFF8FF', text: '#1570EF', label: 'New' },
+  contacted: { bg: '#FFFAEB', text: '#F79009', label: 'Contacted' },
+  quoted:    { bg: '#F4F3FF', text: '#6941C6', label: 'Quoted' },
+  converted: { bg: '#ECFDF3', text: '#12B76A', label: 'Converted' },
+  dead:      { bg: '#F2F4F7', text: '#667085', label: 'Dead' },
 }
 
 export default function StatusBadge({ status, type = 'person' }: StatusBadgeProps) {
   const config = type === 'lead' ? leadConfig : personConfig
-  const entry = config[status] ?? { bg: '#f3f4f6', text: '#6b7280', label: status }
+  const entry = config[status] ?? { bg: '#F2F4F7', text: '#667085', label: status }
 
   return (
     <span
       style={{
-        display: 'inline-block',
+        display: 'inline-flex',
+        alignItems: 'center',
         background: entry.bg,
         color: entry.text,
-        padding: '2px 8px',
+        padding: '2px 10px',
         fontSize: '12px',
         fontWeight: 500,
-        borderRadius: 0,
+        borderRadius: '9999px',
       }}
     >
       {entry.label}

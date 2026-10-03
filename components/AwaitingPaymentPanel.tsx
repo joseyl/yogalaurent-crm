@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { formatGBP } from '@/lib/utils'
+import Collapsible from '@/components/ui/Collapsible'
 
 interface Row {
   id: string
@@ -64,26 +65,24 @@ export default function AwaitingPaymentPanel() {
     }
   }
 
+  const count = loaded ? rows.length : '-'
+  const tone = loaded && rows.length > 0 ? 'warning' : 'neutral'
+
   return (
-    <div className="bg-white border border-[#e5e7eb] border-l-4 border-l-[#B8540A] p-4">
-      <div className="flex items-baseline justify-between mb-1 gap-2">
-        <h2 className="font-semibold" style={{ color: '#1A2C4E' }}>
-          Payments to Confirm
-        </h2>
-        {loaded && rows.length > 0 && (
-          <span className="text-sm font-semibold" style={{ color: '#B8540A' }}>
-            {formatGBP(outstandingTotal)} outstanding
-          </span>
-        )}
-      </div>
-      <p className="text-xs text-gray-400 mb-3">
+    <Collapsible title="Payments to Confirm" count={count} tone={tone}>
+      {loaded && rows.length > 0 && (
+        <p className="text-xs font-semibold mb-2" style={{ color: 'var(--color-amber-vivid)' }}>
+          {formatGBP(outstandingTotal)} outstanding
+        </p>
+      )}
+      <p className="text-xs text-muted mb-3">
         Bank transfers not yet received, and deposit balances still to collect
       </p>
 
       {!loaded ? (
-        <p className="text-gray-400 italic text-sm">Loading…</p>
+        <p className="text-sm text-muted italic">Loading...</p>
       ) : rows.length === 0 ? (
-        <p className="text-gray-400 italic text-sm">Nothing to chase</p>
+        <p className="text-sm text-muted">Nothing to action.</p>
       ) : (
         rows.map(row => {
           const fullName = [row.person?.first_name, row.person?.last_name].filter(Boolean).join(' ')
@@ -92,21 +91,21 @@ export default function AwaitingPaymentPanel() {
           return (
             <div
               key={row.id}
-              className="flex items-center justify-between py-2 border-b border-gray-100 last:border-0 gap-2"
+              className="flex items-center justify-between py-2 border-b border-card-border last:border-0 gap-2"
             >
               <Link
                 href={`/clients/${row.person?.id}`}
-                className="text-sm font-medium text-[#1A2C4E] hover:underline shrink-0"
+                className="text-sm font-medium text-heading hover:text-accent hover:underline shrink-0"
               >
                 {fullName || row.person?.email || 'Unknown'}
               </Link>
 
-              <span className="text-xs text-gray-500 hidden sm:block truncate flex-1">
+              <span className="text-xs text-muted hidden sm:block truncate flex-1">
                 {row.product}
                 {row.order_ref ? ` · ${row.order_ref}` : ''}
               </span>
 
-              <span className="text-xs text-gray-400 shrink-0 hidden sm:block">
+              <span className="text-xs text-muted shrink-0 hidden sm:block">
                 {row.kind === 'balance' && row.balance_due_date
                   ? `Due ${formatDate(row.balance_due_date)}`
                   : formatDate(row.purchase_date)}
@@ -114,7 +113,7 @@ export default function AwaitingPaymentPanel() {
 
               <span
                 className="text-xs font-medium shrink-0"
-                style={{ color: overdue ? '#dc2626' : '#d97706' }}
+                style={{ color: overdue ? 'var(--color-red-vivid)' : 'var(--color-amber-vivid)' }}
               >
                 {row.kind === 'awaiting'
                   ? `Awaiting ${formatGBP(row.outstanding)}`
@@ -126,12 +125,12 @@ export default function AwaitingPaymentPanel() {
                 disabled={busy === row.id}
                 className="btn-secondary shrink-0 text-xs"
               >
-                {busy === row.id ? 'Saving…' : 'Mark paid'}
+                {busy === row.id ? 'Saving...' : 'Mark paid'}
               </button>
             </div>
           )
         })
       )}
-    </div>
+    </Collapsible>
   )
 }

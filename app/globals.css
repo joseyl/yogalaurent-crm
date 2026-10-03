@@ -1,31 +1,62 @@
 @import "tailwindcss";
 
+/* ── Accent token: change --accent here to retheme the whole app ─────────── */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --accent:       #0E7C86;
+  --accent-hover: #0B6770;
+  --accent-tint:  #E6F4F5;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
+  /* Accent */
+  --color-accent:       var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-tint:  var(--accent-tint);
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  /* Surfaces */
+  --color-page-bg:     #F5F6F8;
+  --color-card-border: #E4E7EC;
+
+  /* Text */
+  --color-heading: #101828;
+  --color-body:    #475467;
+  --color-muted:   #667085;
+
+  /* Status backgrounds */
+  --color-green-subtle: #ECFDF3;
+  --color-amber-subtle: #FFFAEB;
+  --color-red-subtle:   #FEF3F2;
+  --color-grey-subtle:  #F2F4F7;
+
+  /* Status foregrounds */
+  --color-green-vivid: #12B76A;
+  --color-amber-vivid: #F79009;
+  --color-red-vivid:   #F04438;
+  --color-grey-vivid:  #667085;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--color-page-bg);
+  color: var(--color-body);
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 14px;
 }
 
-/* ── Button system ─────────────────────────────────────────────────────────── */
+@media (max-width: 767px) {
+  body {
+    font-size: 15px;
+  }
+}
+
+/* ── Card shell utility ──────────────────────────────────────────────────── */
+.card {
+  background: #ffffff;
+  border: 1px solid var(--color-card-border);
+  border-radius: 12px;
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.05);
+}
+
+/* ── Button system ───────────────────────────────────────────────────────── */
 .btn-primary,
 .btn-secondary,
 .btn-destructive {
@@ -35,7 +66,7 @@ body {
   gap: 6px;
   padding: 10px 20px;
   min-height: 44px;
-  border-radius: 6px;
+  border-radius: 8px;
   font-size: 14px;
   cursor: pointer;
   text-decoration: none;
@@ -50,14 +81,14 @@ body {
   }
 }
 .btn-primary {
-  background: #B8540A;
+  background: var(--accent);
   color: white;
   border: none;
   font-weight: 600;
 }
 .btn-primary:hover:not(:disabled) {
-  background: #9A4508;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.15);
+  background: var(--accent-hover);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
 }
 .btn-primary:disabled {
   opacity: 0.5;
@@ -71,7 +102,7 @@ body {
 }
 .btn-secondary:hover:not(:disabled) {
   background: #F9FAFB;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 .btn-secondary:disabled {
   opacity: 0.5;
@@ -85,7 +116,7 @@ body {
 }
 .btn-destructive:hover:not(:disabled) {
   background: #FEF2F2;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 .btn-destructive:disabled {
   opacity: 0.5;
