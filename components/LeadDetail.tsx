@@ -145,10 +145,11 @@ export default function LeadDetail({ lead: initialLead }: Props) {
 
   const selectStyle: React.CSSProperties = {
     border: '1px solid #E4E7EC',
-    padding: '8px 10px',
+    paddingTop: '8px',
+    paddingBottom: '8px',
+    paddingLeft: '10px',
     fontSize: '14px',
     borderRadius: '8px',
-    background: 'white',
     minHeight: '44px',
     width: '100%',
   }

@@ -253,7 +253,7 @@ export default function ClientDetail({ person: initialPerson, purchases, attenda
                 onChange={e => setField('status', e.target.value)}
                 onFocus={onFocus}
                 onBlur={onBlur}
-                style={inputStyle}
+                style={{ ...inputStyle, paddingRight: '2.5rem' }}
               >
                 <option value="client">client</option>
                 <option value="lead">lead</option>
@@ -268,7 +268,7 @@ export default function ClientDetail({ person: initialPerson, purchases, attenda
                 onChange={e => setField('assigned_to', e.target.value)}
                 onFocus={onFocus}
                 onBlur={onBlur}
-                style={inputStyle}
+                style={{ ...inputStyle, paddingRight: '2.5rem' }}
               >
                 <option value="Jose">Jose</option>
                 <option value="Laurent">Laurent</option>
