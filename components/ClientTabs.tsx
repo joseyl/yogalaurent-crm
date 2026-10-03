@@ -668,6 +668,11 @@ export default function ClientTabs({ personId, purchases, attendance, leads, pro
               </div>
             </div>
 
+            {/* Summary bar */}
+            <div className="px-3 py-2.5 mb-3 border border-[#e5e7eb]" style={{ background: '#f9fafb' }}>
+              <p className="text-heading text-sm font-semibold">{buildSummaryText()}</p>
+            </div>
+
             {/* Year / Month filters */}
             <div className="flex gap-2 mb-5 p-3 rounded-lg flex-wrap bg-grey-subtle">
               <select
