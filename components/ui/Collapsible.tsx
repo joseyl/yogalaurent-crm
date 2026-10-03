@@ -33,7 +33,7 @@ export default function Collapsible({
         type="button"
         onClick={() => setOpen(o => !o)}
         aria-expanded={open}
-        className="flex w-full items-center justify-between px-5 py-4 text-left"
+        className="flex w-full items-center justify-between gap-2 px-4 py-4 text-left md:px-5"
       >
         <span className="flex items-center gap-2 text-sm font-semibold text-heading">
           {title}
@@ -44,7 +44,7 @@ export default function Collapsible({
           )}
         </span>
         <svg
-          className={`h-4 w-4 text-muted transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
+          className={`h-4 w-4 shrink-0 text-muted transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
           viewBox="0 0 24 24"
           fill="none"
           stroke="currentColor"
@@ -57,7 +57,7 @@ export default function Collapsible({
         </svg>
       </button>
       {open && (
-        <div className="border-t border-card-border px-5 pb-5 pt-4">
+        <div className="border-t border-card-border px-4 pb-5 pt-4 md:px-5">
           {children}
         </div>
       )}
