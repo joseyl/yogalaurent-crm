@@ -3,6 +3,7 @@
 import { useState, useEffect, Fragment } from 'react'
 import { Edit2, Trash2, RefreshCcw, Plus, ChevronDown, ChevronRight } from 'lucide-react'
 import StatusBadge from '@/components/StatusBadge'
+import Card from '@/components/ui/Card'
 import { formatGBP } from '@/lib/utils'
 
 interface Product {
@@ -96,10 +97,22 @@ const PAGE_SIZE = 20
 const formInputStyle: React.CSSProperties = {
   width: '100%',
   minHeight: '44px',
-  border: '1px solid #d1d5db',
+  border: '1px solid #E4E7EC',
   padding: '8px 10px',
   fontSize: '14px',
-  borderRadius: 0,
+  borderRadius: '8px',
+  outline: 'none',
+  boxSizing: 'border-box',
+}
+
+const formSelectStyle: React.CSSProperties = {
+  width: '100%',
+  minHeight: '44px',
+  border: '1px solid #E4E7EC',
+  paddingTop: '8px',
+  paddingBottom: '8px',
+  paddingLeft: '10px',
+  fontSize: '14px',
   outline: 'none',
   boxSizing: 'border-box',
 }
@@ -107,10 +120,22 @@ const formInputStyle: React.CSSProperties = {
 const inlineInputStyle: React.CSSProperties = {
   width: '100%',
   minHeight: '36px',
-  border: '1px solid #d1d5db',
+  border: '1px solid #E4E7EC',
   padding: '5px 8px',
   fontSize: '13px',
-  borderRadius: 0,
+  borderRadius: '6px',
+  outline: 'none',
+  boxSizing: 'border-box',
+}
+
+const inlineSelectStyle: React.CSSProperties = {
+  width: '100%',
+  minHeight: '36px',
+  border: '1px solid #E4E7EC',
+  paddingTop: '5px',
+  paddingBottom: '5px',
+  paddingLeft: '8px',
+  fontSize: '13px',
   outline: 'none',
   boxSizing: 'border-box',
 }
@@ -139,7 +164,7 @@ function ProductSelect({
   style?: React.CSSProperties
 }) {
   return (
-    <select value={value} onChange={e => onChange(e.target.value)} style={style ?? formInputStyle}>
+    <select value={value} onChange={e => onChange(e.target.value)} style={style ?? formSelectStyle}>
       <option value="">Select product</option>
       {Object.entries(grouped).map(([cat, items]) => (
         <optgroup key={cat} label={cat.charAt(0).toUpperCase() + cat.slice(1)}>
@@ -512,7 +537,7 @@ export default function ClientTabs({ personId, purchases, attendance, leads, pro
   return (
     <div>
       {/* Tab bar — scrollable on mobile */}
-      <div className="border-b border-[#e5e7eb] overflow-x-auto">
+      <div className="border-b border-card-border overflow-x-auto">
         <div className="flex">
           {TABS.map(tab => (
             <button
@@ -520,8 +545,8 @@ export default function ClientTabs({ personId, purchases, attendance, leads, pro
               onClick={() => setActiveTab(tab)}
               className="px-4 py-3 text-sm font-medium transition-colors whitespace-nowrap"
               style={{
-                color: activeTab === tab ? '#1A2C4E' : '#6b7280',
-                borderBottom: activeTab === tab ? '2px solid #1A2C4E' : '2px solid transparent',
+                color: activeTab === tab ? 'var(--accent)' : 'var(--color-muted)',
+                borderBottom: activeTab === tab ? '2px solid var(--accent)' : '2px solid transparent',
                 fontWeight: activeTab === tab ? 600 : 400,
                 background: 'none',
                 cursor: 'pointer',
@@ -533,23 +558,24 @@ export default function ClientTabs({ personId, purchases, attendance, leads, pro
         </div>
       </div>
 
-      <div className="p-4">
+      <div className="pt-4">
 
         {/* ── PURCHASES TAB ──────────────────────────────────────────────── */}
         {activeTab === 'Purchases' && (
-          <div>
-            {/* Header */}
-            <div className="flex items-center justify-end mb-4">
+          <Card
+            title="Purchases"
+            action={
               <button onClick={openAddForm} className="btn-primary">
                 <Plus size={14} />
                 Add Purchase
               </button>
-            </div>
+            }
+          >
 
             {/* Add purchase form */}
             {showAddForm && (
-              <div className="border border-[#e5e7eb] p-4 mb-4" style={{ background: '#f9fafb' }}>
-                <p className="font-medium text-sm mb-3" style={{ color: '#1A2C4E' }}>New Purchase</p>
+              <div className="card p-4 mb-5" style={{ background: 'var(--color-accent-tint)' }}>
+                <p className="font-medium text-sm mb-3 text-heading">New Purchase</p>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
                   <div>
                     <label className="block text-xs text-gray-500 mb-1">Product *</label>
@@ -628,18 +654,27 @@ export default function ClientTabs({ personId, purchases, attendance, leads, pro
               </div>
             )}
 
-            {/* Summary bar */}
-            <div className="px-3 py-2.5 mb-3 border border-[#e5e7eb]" style={{ background: '#f9fafb' }}>
-              <p className="font-bold text-sm" style={{ color: '#1A2C4E' }}>{buildSummaryText()}</p>
+            {/* KpiCard-style summary */}
+            <div className="grid grid-cols-2 gap-4 mb-5">
+              <div className="card p-4">
+                <p className="text-xs font-medium text-muted uppercase tracking-wide">
+                  {yearFilter || monthFilter ? 'Filtered Spend' : 'Total Spend'}
+                </p>
+                <p className="text-2xl font-bold text-heading mt-1">{formatGBP(filteredTotal)}</p>
+              </div>
+              <div className="card p-4">
+                <p className="text-xs font-medium text-muted uppercase tracking-wide">Purchases</p>
+                <p className="text-2xl font-bold text-heading mt-1">{filteredCount}</p>
+              </div>
             </div>
 
             {/* Year / Month filters */}
-            <div className="flex gap-2 mb-4 flex-wrap">
+            <div className="flex gap-2 mb-5 p-3 rounded-lg flex-wrap bg-grey-subtle">
               <select
                 value={yearFilter}
                 onChange={e => { setYearFilter(e.target.value); setMonthFilter('') }}
-                className="border border-[#d1d5db] px-3 py-2 text-sm bg-white focus:outline-none"
-                style={{ borderRadius: 0, minHeight: '40px' }}
+                className="border border-card-border text-sm"
+                style={{ minHeight: '44px', paddingTop: '8px', paddingBottom: '8px', paddingLeft: '12px' }}
               >
                 <option value="">All years</option>
                 {yearOptions.map(y => <option key={y} value={y}>{y}</option>)}
@@ -648,8 +683,8 @@ export default function ClientTabs({ personId, purchases, attendance, leads, pro
                 <select
                   value={monthFilter}
                   onChange={e => setMonthFilter(e.target.value)}
-                  className="border border-[#d1d5db] px-3 py-2 text-sm bg-white focus:outline-none"
-                  style={{ borderRadius: 0, minHeight: '40px' }}
+                  className="border border-card-border text-sm"
+                  style={{ minHeight: '44px', paddingTop: '8px', paddingBottom: '8px', paddingLeft: '12px' }}
                 >
                   <option value="">All months</option>
                   {MONTH_NAMES.map((name, i) => (
@@ -674,22 +709,22 @@ export default function ClientTabs({ personId, purchases, attendance, leads, pro
                       {/* Group header */}
                       <button
                         onClick={() => toggleGroup(group.productName)}
-                        className="w-full flex items-center justify-between px-3 py-2.5 border border-[#e5e7eb] text-left"
-                        style={{ background: '#f9fafb', borderRadius: 0, cursor: 'pointer', border: '1px solid #e5e7eb' }}
+                        className="w-full flex items-center justify-between px-3 py-2.5 text-left rounded-lg border border-card-border"
+                        style={{ background: 'var(--color-grey-subtle)', cursor: 'pointer' }}
                       >
                         <div className="flex items-center gap-2 min-w-0">
                           {isExpanded
-                            ? <ChevronDown size={14} className="shrink-0" style={{ color: '#6b7280' }} />
-                            : <ChevronRight size={14} className="shrink-0" style={{ color: '#6b7280' }} />
+                            ? <ChevronDown size={14} className="shrink-0 text-muted" />
+                            : <ChevronRight size={14} className="shrink-0 text-muted" />
                           }
-                          <span className="font-medium text-sm truncate" style={{ color: '#1A2C4E' }}>{group.productName}</span>
-                          <span className="text-xs text-gray-400 shrink-0 whitespace-nowrap">
+                          <span className="font-medium text-sm truncate text-heading">{group.productName}</span>
+                          <span className="text-xs text-muted shrink-0 whitespace-nowrap">
                             {group.purchases.length} purchase{group.purchases.length !== 1 ? 's' : ''}
                           </span>
                         </div>
                         <span
                           className="font-semibold text-sm shrink-0 ml-3 whitespace-nowrap"
-                          style={{ color: group.total < 0 ? '#ef4444' : '#1A2C4E' }}
+                          style={{ color: group.total < 0 ? 'var(--color-red-vivid)' : 'var(--color-heading)' }}
                         >
                           {formatGBP(group.total)}
                         </span>
@@ -697,11 +732,11 @@ export default function ClientTabs({ personId, purchases, attendance, leads, pro
 
                       {/* Expanded rows */}
                       {isExpanded && (
-                        <div className="border border-t-0 border-[#e5e7eb]">
+                        <div className="border border-t-0 border-card-border rounded-b-lg overflow-hidden">
                           {rows.map(p => (
                             <Fragment key={p.id}>
                               {editingId === p.id ? (
-                                <div className="px-3 py-3 border-b border-[#f3f4f6]" style={{ background: '#f9fafb' }}>
+                                <div className="px-3 py-3 border-b border-card-border bg-grey-subtle">
                                   <div className="grid grid-cols-1 md:grid-cols-4 gap-2 mb-2">
                                     <div>
                                       <label className="block text-xs text-gray-500 mb-1">Product</label>
@@ -709,7 +744,7 @@ export default function ClientTabs({ personId, purchases, attendance, leads, pro
                                         value={editForm.product_id}
                                         onChange={v => setEditForm(f => ({ ...f, product_id: v }))}
                                         grouped={groupedProducts}
-                                        style={inlineInputStyle}
+                                        style={inlineSelectStyle}
                                       />
                                     </div>
                                     <div>
@@ -750,11 +785,11 @@ export default function ClientTabs({ personId, purchases, attendance, leads, pro
                                   </div>
                                 </div>
                               ) : (
-                                <div className="flex items-center gap-2 px-3 py-2.5 border-b border-[#f3f4f6]">
-                                  <span className="text-xs text-gray-500 whitespace-nowrap w-[90px] shrink-0">{formatDate(p.purchase_date)}</span>
+                                <div className="flex items-center gap-2 px-3 py-2.5 border-b border-card-border hover:bg-grey-subtle transition-colors">
+                                  <span className="text-xs text-muted whitespace-nowrap w-[90px] shrink-0">{formatDate(p.purchase_date)}</span>
                                   <span
                                     className="text-xs font-semibold w-[76px] shrink-0 text-right"
-                                    style={{ color: p.amount_gbp < 0 ? '#ef4444' : '#1A2C4E' }}
+                                    style={{ color: p.amount_gbp < 0 ? 'var(--color-red-vivid)' : 'var(--color-heading)' }}
                                   >
                                     {formatGBP(Number(p.amount_gbp))}
                                   </span>
@@ -764,28 +799,28 @@ export default function ClientTabs({ personId, purchases, attendance, leads, pro
                                       <button onClick={() => startEditPurchase(p)} style={iconBtnStyle}>
                                         <Edit2 size={13} />
                                       </button>
-                                      <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-0.5 text-xs text-white rounded opacity-0 group-hover:opacity-100 transition-none whitespace-nowrap z-10" style={{ background: '#1A2C4E' }}>Edit</span>
+                                      <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-0.5 text-xs text-white rounded opacity-0 group-hover:opacity-100 transition-none whitespace-nowrap z-10" style={{ background: 'var(--color-heading)' }}>Edit</span>
                                     </div>
                                     {Number(p.amount_gbp) > 0 && (
                                       <div className="relative group">
                                         <button onClick={() => startRefund(p)} style={iconBtnStyle}>
                                           <RefreshCcw size={13} />
                                         </button>
-                                        <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-0.5 text-xs text-white rounded opacity-0 group-hover:opacity-100 transition-none whitespace-nowrap z-10" style={{ background: '#1A2C4E' }}>Issue refund</span>
+                                        <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-0.5 text-xs text-white rounded opacity-0 group-hover:opacity-100 transition-none whitespace-nowrap z-10" style={{ background: 'var(--color-heading)' }}>Issue refund</span>
                                       </div>
                                     )}
                                     <div className="relative group">
                                       <button onClick={() => handleDelete(p.id)} style={{ ...iconBtnStyle, color: '#DC2626' }}>
                                         <Trash2 size={13} />
                                       </button>
-                                      <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-0.5 text-xs text-white rounded opacity-0 group-hover:opacity-100 transition-none whitespace-nowrap z-10" style={{ background: '#1A2C4E' }}>Delete</span>
+                                      <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-0.5 text-xs text-white rounded opacity-0 group-hover:opacity-100 transition-none whitespace-nowrap z-10" style={{ background: 'var(--color-heading)' }}>Delete</span>
                                     </div>
                                   </div>
                                 </div>
                               )}
                               {refundingId === p.id && (
-                                <div className="px-3 py-3 border-b border-[#f3f4f6]">
-                                  <div className="border border-[#fde68a] p-3" style={{ background: '#fffbeb' }}>
+                                <div className="px-3 py-3 border-b border-card-border">
+                                  <div className="border border-amber-200 rounded-lg p-3 bg-amber-subtle">
                                     <p className="text-xs font-semibold mb-2" style={{ color: '#92400e' }}>
                                       Issue refund for {p.product_name} (max {formatGBP(p.amount_gbp)})
                                     </p>
@@ -850,36 +885,42 @@ export default function ClientTabs({ personId, purchases, attendance, leads, pro
                 })}
               </div>
             )}
-          </div>
+          </Card>
         )}
 
         {/* ── ATTENDANCE TAB ─────────────────────────────────────────────── */}
         {activeTab === 'Attendance' && (
-          <div>
+          <Card>
             {attendanceCount === 0 ? (
-              <p className="text-gray-400 text-sm">No attendance recorded.</p>
+              <p className="text-muted text-sm">No attendance recorded.</p>
             ) : (
               <>
-                <p className="text-sm mb-4" style={{ color: '#1A2C4E' }}>
-                  <span className="font-bold">{attendanceCount}</span> classes attended. Last attended:{' '}
-                  <span className="font-bold">{formatDate(lastAttendance)}</span>.
-                </p>
+                <div className="grid grid-cols-2 gap-4 mb-5">
+                  <div className="card p-4">
+                    <p className="text-xs font-medium text-muted uppercase tracking-wide">Classes Attended</p>
+                    <p className="text-2xl font-bold text-heading mt-1">{attendanceCount}</p>
+                  </div>
+                  <div className="card p-4">
+                    <p className="text-xs font-medium text-muted uppercase tracking-wide">Last Attended</p>
+                    <p className="text-lg font-bold text-heading mt-1">{formatDate(lastAttendance)}</p>
+                  </div>
+                </div>
 
-                <div className="hidden md:block">
+                <div className="hidden md:block overflow-x-auto">
                   <table className="w-full border-collapse">
                     <thead>
-                      <tr className="border-b border-[#e5e7eb]">
+                      <tr className="bg-grey-subtle">
                         {['Date', 'Class Name', 'Pass Used'].map(h => (
-                          <th key={h} className="text-left uppercase tracking-wide pb-3 pr-4 text-[11px]" style={{ color: '#6b7280' }}>{h}</th>
+                          <th key={h} className="text-left uppercase tracking-wide px-3 py-2.5 pr-4 text-[11px] text-muted first:rounded-tl-lg last:rounded-tr-lg">{h}</th>
                         ))}
                       </tr>
                     </thead>
                     <tbody>
                       {attendance.map(a => (
-                        <tr key={a.id} className="border-b border-[#f3f4f6]">
-                          <td className="py-3 pr-4 text-sm text-gray-500">{formatDate(a.class_date)}</td>
-                          <td className="py-3 pr-4 text-sm font-medium" style={{ color: '#1A2C4E' }}>{a.class_name}</td>
-                          <td className="py-3 text-sm text-gray-500">{a.pass_used ?? '—'}</td>
+                        <tr key={a.id} className="border-b border-card-border hover:bg-grey-subtle transition-colors">
+                          <td className="py-3 px-3 pr-4 text-sm text-muted">{formatDate(a.class_date)}</td>
+                          <td className="py-3 px-3 pr-4 text-sm font-medium text-heading">{a.class_name}</td>
+                          <td className="py-3 px-3 text-sm text-muted">{a.pass_used ?? '—'}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -888,43 +929,43 @@ export default function ClientTabs({ personId, purchases, attendance, leads, pro
 
                 <div className="md:hidden space-y-3">
                   {attendance.map(a => (
-                    <div key={a.id} className="border border-[#e5e7eb] p-3" style={{ borderRadius: 0 }}>
-                      <p className="font-medium text-sm" style={{ color: '#1A2C4E' }}>{a.class_name}</p>
-                      <p className="text-gray-400 text-xs mt-1">{formatDate(a.class_date)}</p>
-                      {a.pass_used && <p className="text-gray-500 text-xs mt-0.5">{a.pass_used}</p>}
+                    <div key={a.id} className="card p-3">
+                      <p className="font-medium text-sm text-heading">{a.class_name}</p>
+                      <p className="text-muted text-xs mt-1">{formatDate(a.class_date)}</p>
+                      {a.pass_used && <p className="text-muted text-xs mt-0.5">{a.pass_used}</p>}
                     </div>
                   ))}
                 </div>
               </>
             )}
-          </div>
+          </Card>
         )}
 
         {/* ── LEAD HISTORY TAB ───────────────────────────────────────────── */}
         {activeTab === 'Lead History' && (
-          <div>
+          <Card>
             {leads.length === 0 ? (
-              <p className="text-gray-400 text-sm">No lead history.</p>
+              <p className="text-muted text-sm">No lead history.</p>
             ) : (
               <>
-                <div className="hidden md:block">
+                <div className="hidden md:block overflow-x-auto">
                   <table className="w-full border-collapse">
                     <thead>
-                      <tr className="border-b border-[#e5e7eb]">
+                      <tr className="bg-grey-subtle">
                         {['Date Added', 'Product', 'Status', 'Assigned To', 'Last Follow-up', 'Notes'].map(h => (
-                          <th key={h} className="text-left uppercase tracking-wide pb-3 pr-4 text-[11px]" style={{ color: '#6b7280' }}>{h}</th>
+                          <th key={h} className="text-left uppercase tracking-wide px-3 py-2.5 pr-4 text-[11px] text-muted first:rounded-tl-lg last:rounded-tr-lg">{h}</th>
                         ))}
                       </tr>
                     </thead>
                     <tbody>
                       {leads.map(l => (
-                        <tr key={l.id} className="border-b border-[#f3f4f6]">
-                          <td className="py-3 pr-4 text-sm text-gray-500">{formatDate(l.date_added)}</td>
-                          <td className="py-3 pr-4 text-sm font-medium" style={{ color: '#1A2C4E' }}>{l.product_name ?? '—'}</td>
-                          <td className="py-3 pr-4"><StatusBadge status={l.status} type="lead" /></td>
-                          <td className="py-3 pr-4 text-sm">{l.assigned_to}</td>
-                          <td className="py-3 pr-4 text-sm text-gray-500">{formatDate(l.last_followup_date)}</td>
-                          <td className="py-3 text-sm text-gray-500">{l.notes ?? '—'}</td>
+                        <tr key={l.id} className="border-b border-card-border hover:bg-grey-subtle transition-colors">
+                          <td className="py-3 px-3 pr-4 text-sm text-muted">{formatDate(l.date_added)}</td>
+                          <td className="py-3 px-3 pr-4 text-sm font-medium text-heading">{l.product_name ?? '—'}</td>
+                          <td className="py-3 px-3 pr-4"><StatusBadge status={l.status} type="lead" /></td>
+                          <td className="py-3 px-3 pr-4 text-sm text-body">{l.assigned_to}</td>
+                          <td className="py-3 px-3 pr-4 text-sm text-muted">{formatDate(l.last_followup_date)}</td>
+                          <td className="py-3 px-3 text-sm text-muted">{l.notes ?? '—'}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -933,41 +974,39 @@ export default function ClientTabs({ personId, purchases, attendance, leads, pro
 
                 <div className="md:hidden space-y-3">
                   {leads.map(l => (
-                    <div key={l.id} className="border border-[#e5e7eb] p-3" style={{ borderRadius: 0 }}>
+                    <div key={l.id} className="card p-3">
                       <div className="flex items-center justify-between">
-                        <p className="font-medium text-sm" style={{ color: '#1A2C4E' }}>{l.product_name ?? '—'}</p>
+                        <p className="font-medium text-sm text-heading">{l.product_name ?? '—'}</p>
                         <StatusBadge status={l.status} type="lead" />
                       </div>
-                      <p className="text-gray-400 text-xs mt-1">Added: {formatDate(l.date_added)}</p>
-                      <p className="text-gray-400 text-xs">Follow-up: {formatDate(l.last_followup_date)}</p>
+                      <p className="text-muted text-xs mt-1">Added: {formatDate(l.date_added)}</p>
+                      <p className="text-muted text-xs">Follow-up: {formatDate(l.last_followup_date)}</p>
                     </div>
                   ))}
                 </div>
               </>
             )}
-          </div>
+          </Card>
         )}
 
         {/* ── INTERESTS TAB ──────────────────────────────────────────────── */}
         {activeTab === 'Interests' && (
-          <div>
-            <div className="flex items-center justify-between mb-4">
-              <p className="font-bold" style={{ color: '#1A2C4E' }}>Interests</p>
-              <button
-                onClick={openAddInterestForm}
-                className="btn-primary"
-              >
+          <Card
+            title="Interests"
+            action={
+              <button onClick={openAddInterestForm} className="btn-primary">
                 Add interest
               </button>
-            </div>
+            }
+          >
 
             {/* Add interest form */}
             {showAddInterestForm && (
-              <div className="border border-[#e5e7eb] p-4 mb-4" style={{ background: '#f9fafb' }}>
-                <p className="font-medium text-sm mb-3" style={{ color: '#1A2C4E' }}>New Interest</p>
+              <div className="card p-4 mb-5" style={{ background: 'var(--color-accent-tint)' }}>
+                <p className="font-medium text-sm mb-3 text-heading">New Interest</p>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
                   <div>
-                    <label className="block text-xs text-gray-500 mb-1">Product *</label>
+                    <label className="block text-xs text-muted mb-1">Product *</label>
                     <ProductSelect
                       value={addInterestForm.product_id}
                       onChange={v => setAddInterestForm(f => ({ ...f, product_id: v }))}
@@ -975,7 +1014,7 @@ export default function ClientTabs({ personId, purchases, attendance, leads, pro
                     />
                   </div>
                   <div>
-                    <label className="block text-xs text-gray-500 mb-1">Source</label>
+                    <label className="block text-xs text-muted mb-1">Source</label>
                     <input
                       type="text"
                       placeholder="How did this come up? e.g. completed 60hr, asked at retreat"
@@ -985,7 +1024,7 @@ export default function ClientTabs({ personId, purchases, attendance, leads, pro
                     />
                   </div>
                   <div className="md:col-span-2">
-                    <label className="block text-xs text-gray-500 mb-1">Notes</label>
+                    <label className="block text-xs text-muted mb-1">Notes</label>
                     <textarea
                       value={addInterestForm.notes}
                       onChange={e => setAddInterestForm(f => ({ ...f, notes: e.target.value }))}
@@ -1011,26 +1050,25 @@ export default function ClientTabs({ personId, purchases, attendance, leads, pro
             )}
 
             {interests === null ? (
-              <p className="text-gray-400 text-sm">Loading...</p>
+              <p className="text-muted text-sm">Loading...</p>
             ) : interests.length === 0 ? (
-              <p className="text-gray-400 text-sm">No interests recorded yet.</p>
+              <p className="text-muted text-sm">No interests recorded yet.</p>
             ) : (
               <div className="space-y-2">
                 {interests.map(interest => (
                   <div
                     key={interest.id}
-                    className="flex items-center justify-between border border-[#e5e7eb] p-3"
-                    style={{ borderRadius: 0 }}
+                    className="flex items-center justify-between card p-3"
                   >
                     <div className="flex flex-col gap-0.5 flex-1 min-w-0 pr-3">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-medium text-sm" style={{ color: '#1A2C4E' }}>{interest.product_name}</span>
+                        <span className="font-medium text-sm text-heading">{interest.product_name}</span>
                         <StatusBadge status={interest.category} type="person" />
                       </div>
                       <div className="flex items-center gap-3 flex-wrap mt-0.5">
-                        {interest.source && <span className="text-xs text-gray-500">{interest.source}</span>}
-                        <span className="text-xs text-gray-400">{formatDate(interest.added_date)}</span>
-                        <span className="text-xs text-gray-400">{interest.added_by}</span>
+                        {interest.source && <span className="text-xs text-muted">{interest.source}</span>}
+                        <span className="text-xs text-muted">{formatDate(interest.added_date)}</span>
+                        <span className="text-xs text-muted">{interest.added_by}</span>
                       </div>
                     </div>
                     <button
@@ -1043,7 +1081,7 @@ export default function ClientTabs({ personId, purchases, attendance, leads, pro
                 ))}
               </div>
             )}
-          </div>
+          </Card>
         )}
 
       </div>
