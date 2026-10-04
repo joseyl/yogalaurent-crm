@@ -206,6 +206,12 @@ export async function getActivePasses(memberId: string): Promise<MomenceBoughtMe
 // ── Membership lookup (used by webhook handlers) ──────────────────────────────
 
 export const MOMENCE_MEMBERSHIP_LOOKUP: Record<string, MomenceMembership> = {
+  '930677': {
+    productName: 'One month access',
+    amountGbp: 0,
+    notes: 'Promotional pass, price 0. Fill in price from the Momence sales report if paid.',
+    expiryDays: null,
+  },
   '394008': {
     productName: 'Introductory Offer',
     amountGbp: 20,
