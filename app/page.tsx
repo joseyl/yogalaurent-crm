@@ -65,6 +65,7 @@ async function fetchDashboardData() {
   const firstOfYear     = new Date(Date.UTC(londonYear, 0,                1)).toISOString().split('T')[0]
   const firstOfNextYear = new Date(Date.UTC(londonYear + 1, 0,            1)).toISOString().split('T')[0]
   const sevenDaysAgo = daysAgo(7)
+  const sevenDaysAgoIso = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString()
   const twentyEightDaysAgo = daysAgo(28)
   const oneEightyDaysAgo = daysAgo(180)
   const elevenMonthsAgo = new Date(Date.UTC(londonYear, londonMonth - 11,  1)).toISOString().split('T')[0]
@@ -81,6 +82,7 @@ async function fetchDashboardData() {
     { data: clientsData },
     { data: leadsData },
     { data: latestSync },
+    { data: webhookProblems, count: webhookProblemCount, error: webhookError },
   ] = await Promise.all([
     supabase.from('people').select('*', { count: 'exact', head: true }).eq('status', 'client'),
     supabase.from('leads').select('*', { count: 'exact', head: true }).in('status', ['new', 'contacted', 'quoted']),
@@ -101,6 +103,7 @@ async function fetchDashboardData() {
     supabase.from('people').select('created_at').eq('status', 'client').gte('created_at', elevenMonthsAgo),
     supabase.from('leads').select('date_added').gte('date_added', elevenMonthsAgo),
     supabase.from('sync_runs').select('status,finished_at,error,created_at').order('id', { ascending: false }).limit(1).maybeSingle(),
+    supabase.from('webhook_log').select('created_at, source, event_type, status, error_message', { count: 'exact' }).in('status', ['failed', 'skipped']).gte('created_at', sevenDaysAgoIso).order('created_at', { ascending: false }).limit(20),
   ])
 
   // Summary
@@ -194,11 +197,17 @@ async function fetchDashboardData() {
     categoryRevenue,
     trend,
     latestSync: latestSync as { status: string; finished_at: string | null; error: string | null; created_at: string } | null,
+    // ok is false if the check could not be read, so the page never shows a false 0
+    webhookCheck: {
+      ok: !webhookError && webhookProblemCount !== null,
+      count: webhookProblemCount ?? 0,
+      rows: (webhookProblems ?? []) as { created_at: string; source: string; event_type: string; status: string; error_message: string | null }[],
+    },
   }
 }
 
 export default async function DashboardPage() {
-  const { summary, staleLeads, goneQuiet, categoryRevenue, trend, latestSync } = await fetchDashboardData()
+  const { summary, staleLeads, goneQuiet, categoryRevenue, trend, latestSync, webhookCheck } = await fetchDashboardData()
 
   const dotColor = !latestSync
     ? 'var(--color-muted)'
@@ -219,25 +228,6 @@ export default async function DashboardPage() {
           </>
         }
       />
-
-      {/* Momence sync status */}
-      <div className="card flex items-center gap-3 p-4 mb-6">
-        <span
-          className="w-2.5 h-2.5 flex-shrink-0 rounded-full"
-          style={{ background: dotColor }}
-        />
-        <p className="text-sm text-body">
-          {latestSync
-            ? <>
-                Momence copy: last run{' '}
-                {formatUKDateTime(latestSync.finished_at ?? latestSync.created_at)},{' '}
-                {latestSync.status === 'success' ? 'Success' : 'Failed'}
-                {latestSync.status === 'failed' && latestSync.error && ` — ${latestSync.error}`}
-              </>
-            : 'Momence copy: no sync yet'
-          }
-        </p>
-      </div>
 
       {/* KPI strip */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
@@ -326,6 +316,67 @@ export default async function DashboardPage() {
 
       {/* Charts */}
       <DashboardCharts categoryRevenue={categoryRevenue} trend={trend} />
+
+      {/* System status, kept below the information cards */}
+      <div className="mt-6">
+        {/* Momence sync status */}
+        <div className="card flex items-center gap-3 p-4 mb-3">
+          <span
+            className="w-2.5 h-2.5 flex-shrink-0 rounded-full"
+            style={{ background: dotColor }}
+          />
+          <p className="text-sm text-body">
+            {latestSync
+              ? <>
+                  Momence copy: last run{' '}
+                  {formatUKDateTime(latestSync.finished_at ?? latestSync.created_at)},{' '}
+                  {latestSync.status === 'success' ? 'Success' : 'Failed'}
+                  {latestSync.status === 'failed' && latestSync.error && ` — ${latestSync.error}`}
+                </>
+              : 'Momence copy: no sync yet'
+            }
+          </p>
+        </div>
+
+        {/* Webhook problems, last 7 days */}
+        <div className="card flex items-center gap-3 p-4 mb-6">
+          <span
+            className="w-2.5 h-2.5 flex-shrink-0 rounded-full"
+            style={{
+              background: !webhookCheck.ok
+                ? 'var(--color-amber-vivid)'
+                : webhookCheck.count === 0
+                ? 'var(--color-green-vivid)'
+                : 'var(--color-red-vivid)',
+            }}
+          />
+          <p className="text-sm text-body">
+            {!webhookCheck.ok
+              ? 'Webhook check unavailable'
+              : webhookCheck.count === 0
+              ? 'Webhooks: no problems in the last 7 days'
+              : `Webhooks: ${webhookCheck.count} failed or skipped in the last 7 days`}
+          </p>
+        </div>
+
+        {webhookCheck.ok && webhookCheck.count > 0 && (
+          <div className="mb-6">
+            <Collapsible title="Webhook problems" count={webhookCheck.count} tone="danger">
+              <ul className="space-y-2 px-4 pb-4 text-sm text-body md:px-5">
+                {webhookCheck.rows.map((r, i) => (
+                  <li key={i}>
+                    {formatUKDateTime(r.created_at)}, {r.source}, {r.event_type}, {r.status}
+                    {r.error_message && <span className="block text-xs text-muted">{r.error_message}</span>}
+                  </li>
+                ))}
+                {webhookCheck.count > webhookCheck.rows.length && (
+                  <li className="text-xs text-muted">Showing latest {webhookCheck.rows.length}</li>
+                )}
+              </ul>
+            </Collapsible>
+          </div>
+        )}
+      </div>
     </div>
   )
 }
