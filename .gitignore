@@ -42,3 +42,7 @@ next-env.d.ts
 
 # import data
 scripts/data/*.xlsx
+
+# local notes and tool folders, never commit
+BUILD_LOG.md
+.claude/
