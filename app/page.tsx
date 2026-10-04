@@ -81,7 +81,7 @@ async function fetchDashboardData() {
     { data: chartMonthPurchases },
     { data: clientsData },
     { data: leadsData },
-    { data: latestSync },
+    { data: latestSync, error: latestSyncError },
     { data: webhookProblems, count: webhookProblemCount, error: webhookError },
   ] = await Promise.all([
     supabase.from('people').select('*', { count: 'exact', head: true }).eq('status', 'client'),
@@ -102,7 +102,7 @@ async function fetchDashboardData() {
     supabase.from('purchases').select('amount_gbp, products(category)').gte('purchase_date', firstOfMonth).lt('purchase_date', firstOfNextMonth),
     supabase.from('people').select('created_at').eq('status', 'client').gte('created_at', elevenMonthsAgo),
     supabase.from('leads').select('date_added').gte('date_added', elevenMonthsAgo),
-    supabase.from('sync_runs').select('status,finished_at,error,created_at').order('id', { ascending: false }).limit(1).maybeSingle(),
+    supabase.from('sync_runs').select('status,finished_at,error,started_at').order('started_at', { ascending: false }).limit(1).maybeSingle(),
     supabase.from('webhook_log').select('created_at, source, event_type, status, error_message', { count: 'exact' }).in('status', ['failed', 'skipped']).gte('created_at', sevenDaysAgoIso).order('created_at', { ascending: false }).limit(20),
   ])
 
@@ -196,7 +196,9 @@ async function fetchDashboardData() {
     goneQuiet,
     categoryRevenue,
     trend,
-    latestSync: latestSync as { status: string; finished_at: string | null; error: string | null; created_at: string } | null,
+    latestSync: latestSync as { status: string; finished_at: string | null; error: string | null; started_at: string } | null,
+    // true if the sync_runs read failed, so the page never shows a false "no sync yet"
+    latestSyncUnavailable: !!latestSyncError,
     // ok is false if the check could not be read, so the page never shows a false 0
     webhookCheck: {
       ok: !webhookError && webhookProblemCount !== null,
@@ -207,9 +209,11 @@ async function fetchDashboardData() {
 }
 
 export default async function DashboardPage() {
-  const { summary, staleLeads, goneQuiet, categoryRevenue, trend, latestSync, webhookCheck } = await fetchDashboardData()
+  const { summary, staleLeads, goneQuiet, categoryRevenue, trend, latestSync, latestSyncUnavailable, webhookCheck } = await fetchDashboardData()
 
-  const dotColor = !latestSync
+  const dotColor = latestSyncUnavailable
+    ? 'var(--color-amber-vivid)'
+    : !latestSync
     ? 'var(--color-muted)'
     : latestSync.status === 'success'
     ? 'var(--color-green-vivid)'
@@ -326,11 +330,13 @@ export default async function DashboardPage() {
             style={{ background: dotColor }}
           />
           <p className="text-sm text-body">
-            {latestSync
+            {latestSyncUnavailable
+              ? 'Momence status unavailable'
+              : latestSync
               ? <>
                   Momence copy: last run{' '}
-                  {formatUKDateTime(latestSync.finished_at ?? latestSync.created_at)},{' '}
-                  {latestSync.status === 'success' ? 'Success' : 'Failed'}
+                  {formatUKDateTime(latestSync.finished_at ?? latestSync.started_at)},{' '}
+                  {latestSync.status === 'success' ? 'Success' : latestSync.status === 'failed' ? 'Failed' : latestSync.status}
                   {latestSync.status === 'failed' && latestSync.error && ` — ${latestSync.error}`}
                 </>
               : 'Momence copy: no sync yet'
