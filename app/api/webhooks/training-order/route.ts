@@ -9,6 +9,7 @@ import {
   toDateOnly,
   toAmount,
 } from '@/lib/training-order'
+import { decideOrderRef } from '@/lib/order-ref-collision'
 
 const SOURCE = 'yogalaurent'
 const EVENT = 'training_order'
@@ -65,19 +66,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'No email' }, { status: 400 })
   }
 
-  // Idempotency. Stripe retries, and Jose may replay a Make execution.
-  // If we have already seen this order reference, do nothing and say so.
-  const { data: existing } = await supabaseAdmin
-    .from('purchases')
-    .select('id')
-    .eq('order_ref', orderRef)
-    .limit(1)
-
-  if (existing && existing.length > 0) {
-    await log('skipped', payload, `Order ${orderRef} already recorded`)
-    return NextResponse.json({ ok: true, note: 'Already recorded' })
-  }
-
   const productName = PROGRAMME_PRODUCT[programmeType]
 
   if (!productName) {
@@ -123,6 +111,25 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Person lookup failed' }, { status: 500 })
   }
 
+  const { data: existingRows, error: existingError } = await supabaseAdmin
+    .from('purchases')
+    .select('order_ref, person_id')
+    .or(`order_ref.eq.${orderRef},order_ref.like.${orderRef}-%`)
+
+  if (existingError) {
+    await log('failed', payload, `Existing order check failed for ${orderRef}: ${existingError.message}`, personId)
+    return NextResponse.json({ error: 'Existing order check failed' }, { status: 500 })
+  }
+
+  const decision = decideOrderRef(orderRef, personId, existingRows ?? [])
+
+  if (decision.action === 'skip') {
+    await log('skipped', payload, `Order ${orderRef} already recorded for this buyer`, personId)
+    return NextResponse.json({ ok: true, note: 'Already recorded' })
+  }
+
+  const storedRef = decision.orderRef
+
   const { edition, cohortYear } = parseCohort(programmeTitle)
   const purchaseDate = toDateOnly(payload.purchaseDate)
   const totalAmount = toAmount(payload.totalAmountGBP)
@@ -152,7 +159,7 @@ export async function POST(request: NextRequest) {
       payment_option: paymentOption,
       balance_due_date: balanceDueDate,
       purchase_date: purchaseDate,
-      order_ref: orderRef,
+      order_ref: storedRef,
       source,
       edition,
       cohort_year: cohortYear,
@@ -171,13 +178,20 @@ export async function POST(request: NextRequest) {
         payment_option: paymentOption,
         balance_due_date: null,
         purchase_date: purchaseDate,
-        order_ref: orderRef,
+        order_ref: storedRef,
         source,
         edition,
         cohort_year: cohortYear,
-        notes: `Included in 100-hour bundle (order ${orderRef})`,
+        notes: `Included in 100-hour bundle (order ${storedRef})`,
       })),
   ]
+
+  if (decision.collided) {
+    const collisionNote = `REVIEW: orderRef ${orderRef} also used by another order. Stored as ${storedRef}.`
+    for (const row of rows) {
+      row.notes = `${row.notes}. ${collisionNote}`
+    }
+  }
 
   const { error: insertError } = await supabaseAdmin.from('purchases').insert(rows)
 
@@ -186,7 +200,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Purchase insert failed' }, { status: 500 })
   }
 
-  await log('success', payload, undefined, personId)
+  if (decision.collided) {
+    await log('success', payload, `WARNING: orderRef collision. Stored as ${storedRef}.`, personId)
+  } else {
+    await log('success', payload, undefined, personId)
+  }
 
-  return NextResponse.json({ ok: true, orderRef, rowsCreated: rows.length })
+  return NextResponse.json({ ok: true, orderRef: storedRef, rowsCreated: rows.length })
 }
