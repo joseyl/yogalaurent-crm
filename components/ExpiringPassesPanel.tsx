@@ -33,15 +33,17 @@ function daysUntil(dateStr: string): number {
 export default function ExpiringPassesPanel() {
   const [passes, setPasses] = useState<PassRow[]>([])
   const [loaded, setLoaded] = useState(false)
+  const [failed, setFailed] = useState(false)
 
   useEffect(() => {
     fetch('/api/expiring-passes')
-      .then(r => r.json())
-      .then(d => {
-        setPasses(d.passes ?? [])
-        setLoaded(true)
+      .then(async r => {
+        const d = await r.json().catch(() => null)
+        if (!r.ok || !d || !Array.isArray(d.passes)) throw new Error('load failed')
+        setPasses(d.passes)
       })
-      .catch(() => setLoaded(true))
+      .catch(() => setFailed(true))
+      .finally(() => setLoaded(true))
   }, [])
 
   async function dismiss(purchaseId: string) {
@@ -53,17 +55,21 @@ export default function ExpiringPassesPanel() {
     setPasses(prev => prev.filter(p => p.id !== purchaseId))
   }
 
-  const count = loaded ? passes.length : '-'
-  const tone = loaded && passes.length > 0 ? 'warning' : 'neutral'
+  const count = !loaded ? '-' : failed ? '!' : passes.length
+  const tone = failed ? 'danger' : loaded && passes.length > 0 ? 'warning' : 'neutral'
 
   return (
-    <Collapsible title="Expiring Passes" count={count} tone={tone}>
+    <Collapsible title="Class Passes: Expiring" count={count} tone={tone}>
       <p className="text-xs text-muted mb-3">
-        Passes expiring within 15 days or expired in the last 30 days
+        Passes expiring within 15 days or expired in the last 30 days. Hidden if the person has bought another class pass since.
       </p>
 
       {!loaded ? (
         <p className="text-sm text-muted italic">Loading...</p>
+      ) : failed ? (
+        <p className="text-sm" style={{ color: 'var(--color-red-vivid)' }}>
+          Could not load expiring passes. Refresh the page to try again.
+        </p>
       ) : passes.length === 0 ? (
         <p className="text-sm text-muted">Nothing to action.</p>
       ) : (

@@ -1,5 +1,8 @@
 import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase-admin'
+import { getClassPassPurchases } from '@/lib/passRenewals'
+
+export const dynamic = 'force-dynamic'
 
 export async function GET() {
   const in15Days = new Date(Date.now() + 15 * 86400000).toISOString().split('T')[0]
@@ -9,6 +12,7 @@ export async function GET() {
     .from('purchases')
     .select(`
       id,
+      person_id,
       expires_at,
       purchase_date,
       notes,
@@ -33,7 +37,29 @@ export async function GET() {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
-  return NextResponse.json({ passes: data || [] })
+  const passes = data || []
+
+  // Hide a pass when the same person has bought another class pass (not a
+  // drop-in) on or after this pass's purchase date. The pass's own purchase
+  // never counts as its renewal.
+  let classPurchases
+  try {
+    classPurchases = await getClassPassPurchases(
+      passes.map(p => p.person_id as string).filter(Boolean),
+    )
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : 'Renewal check failed'
+    return NextResponse.json({ error: msg }, { status: 500 })
+  }
+
+  const notRenewed = passes.filter(p => {
+    if (!p.person_id) return true
+    return !classPurchases.some(
+      c => c.person_id === p.person_id && c.id !== p.id && c.purchase_date >= p.purchase_date,
+    )
+  })
+
+  return NextResponse.json({ passes: notRenewed, hiddenAsRenewed: passes.length - notRenewed.length })
 }
 
 export async function PATCH(request: Request) {

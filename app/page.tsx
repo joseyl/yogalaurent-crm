@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { createServerClient } from '@/lib/supabase/server'
 import DashboardCharts from '@/components/charts/DashboardCharts'
 import ExpiringPassesPanel from '@/components/ExpiringPassesPanel'
+import PassListsPanel from '@/components/PassListsPanel'
 import AwaitingPaymentPanel from '@/components/AwaitingPaymentPanel'
 import { formatGBP } from '@/lib/utils'
 import { fetchAll } from '@/lib/fetchAll'
@@ -315,6 +316,7 @@ export default async function DashboardPage() {
         </Collapsible>
 
         <ExpiringPassesPanel />
+        <PassListsPanel />
         <AwaitingPaymentPanel />
       </div>
 
