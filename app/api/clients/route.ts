@@ -1,63 +1,70 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase/server'
+import { fetchAll } from '@/lib/fetchAll'
 
+export const dynamic = 'force-dynamic'
+
+// Each client comes with their purchases (date, amount, category) so the Clients
+// page can work out spend for any category and period without reloading.
+// Purchases are read in pages: a single read stops at 1,000 rows.
 export async function GET() {
   const supabase = createServerClient()
 
-  const [{ data: people, error: peopleError }, { data: purchases, error: purchasesError }] =
-    await Promise.all([
-      supabase
-        .from('people')
-        .select('id, first_name, last_name, email, alt_email, phone, country, status, assigned_to, source_channel')
-        .eq('status', 'client')
-        .order('last_name', { ascending: true })
-        .order('first_name', { ascending: true }),
-      supabase
-        .from('purchases')
-        .select('person_id, amount_gbp, purchase_date, products(category)'),
-    ])
+  let people: {
+    id: string
+    first_name: string | null
+    last_name: string | null
+    email: string
+    alt_email: string | null
+    phone: string | null
+    country: string | null
+    status: string
+    assigned_to: string
+    source_channel: string | null
+  }[]
+  let purchases: {
+    person_id: string
+    amount_gbp: number | string | null
+    purchase_date: string | null
+    products: { category: string | null } | null
+  }[]
 
-  if (peopleError || purchasesError) {
+  try {
+    ;[people, purchases] = await Promise.all([
+      fetchAll<(typeof people)[number]>(() =>
+        supabase
+          .from('people')
+          .select('id, first_name, last_name, email, alt_email, phone, country, status, assigned_to, source_channel')
+          .eq('status', 'client')
+          .order('last_name', { ascending: true })
+          .order('first_name', { ascending: true })
+          .order('id', { ascending: true }),
+      ),
+      fetchAll<(typeof purchases)[number]>(() =>
+        supabase
+          .from('purchases')
+          .select('person_id, amount_gbp, purchase_date, products(category)')
+          .order('id', { ascending: true }),
+      ),
+    ])
+  } catch {
     return NextResponse.json({ error: 'Failed to fetch data' }, { status: 500 })
   }
 
-  const spendMap: Record<string, { total: number; last_purchase_date: string | null }> = {}
-  const categoriesMap: Record<string, Set<string>> = {}
-
-  for (const p of purchases ?? []) {
-    // Spend aggregation
-    const existing = spendMap[p.person_id]
-    if (!existing) {
-      spendMap[p.person_id] = { total: Number(p.amount_gbp ?? 0), last_purchase_date: p.purchase_date as string | null }
-    } else {
-      existing.total += Number(p.amount_gbp ?? 0)
-      const pd = p.purchase_date as string | null
-      if (pd && (!existing.last_purchase_date || pd > existing.last_purchase_date)) {
-        existing.last_purchase_date = pd
-      }
-    }
-    // Category aggregation
-    const prod = p.products as unknown as { category: string } | null
-    if (prod?.category) {
-      if (!categoriesMap[p.person_id]) categoriesMap[p.person_id] = new Set()
-      categoriesMap[p.person_id].add(prod.category)
-    }
+  const byPerson: Record<string, { d: string; a: number; c: string }[]> = {}
+  for (const p of purchases) {
+    if (!p.person_id || !p.purchase_date) continue
+    if (!byPerson[p.person_id]) byPerson[p.person_id] = []
+    byPerson[p.person_id].push({
+      d: p.purchase_date,
+      a: Number(p.amount_gbp ?? 0),
+      c: p.products?.category ?? 'other',
+    })
   }
 
-  const result = (people ?? []).map(person => ({
-    id: person.id,
-    first_name: person.first_name,
-    last_name: person.last_name,
-    email: person.email,
-    alt_email: person.alt_email,
-    phone: person.phone,
-    country: person.country,
-    status: person.status,
-    assigned_to: person.assigned_to,
-    source_channel: person.source_channel,
-    total_spend: spendMap[person.id]?.total ?? 0,
-    last_purchase_date: spendMap[person.id]?.last_purchase_date ?? null,
-    categories: Array.from(categoriesMap[person.id] ?? []),
+  const result = people.map(person => ({
+    ...person,
+    purchases: byPerson[person.id] ?? [],
   }))
 
   return NextResponse.json(result)

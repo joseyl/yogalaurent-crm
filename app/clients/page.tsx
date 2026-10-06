@@ -19,12 +19,72 @@ interface Client {
   status: string
   assigned_to: string
   source_channel: string | null
-  total_spend: number
-  last_purchase_date: string | null
-  categories: string[]
+  purchases: { d: string; a: number; c: string }[]
 }
 
-type SortField = 'last_name' | 'total_spend' | 'last_purchase_date'
+// A client with spend and last purchase worked out for the chosen category and period
+interface ClientRow extends Client {
+  spend: number
+  last_purchase_date: string | null
+  matches: number
+}
+
+type Period = 'all' | 'this_month' | 'last_month' | 'this_year' | 'last_year' | 'custom'
+
+const CATEGORY_LABELS: Record<string, string> = {
+  classes: 'Classes',
+  training: 'Training',
+  retreat: 'Retreat',
+  workshop: 'In-person Workshop',
+  private: 'Private',
+  other: 'Other',
+}
+
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+
+function pad(n: number): string {
+  return String(n).padStart(2, '0')
+}
+
+// Today's London date as year, month (1-12)
+function londonYearMonth(): { y: number; m: number } {
+  const [y, m] = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/London' })
+    .format(new Date())
+    .split('-')
+    .map(Number)
+  return { y, m }
+}
+
+function lastDayOfMonth(y: number, m: number): number {
+  return new Date(Date.UTC(y, m, 0)).getUTCDate()
+}
+
+// Inclusive date range (YYYY-MM-DD) and a label for the chosen period
+function periodRange(period: Period, customFrom: string, customTo: string): { from: string | null; to: string | null; label: string } {
+  const { y, m } = londonYearMonth()
+  if (period === 'this_month') {
+    return { from: `${y}-${pad(m)}-01`, to: `${y}-${pad(m)}-${pad(lastDayOfMonth(y, m))}`, label: `${MONTHS[m - 1]} ${y}` }
+  }
+  if (period === 'last_month') {
+    const ly = m === 1 ? y - 1 : y
+    const lm = m === 1 ? 12 : m - 1
+    return { from: `${ly}-${pad(lm)}-01`, to: `${ly}-${pad(lm)}-${pad(lastDayOfMonth(ly, lm))}`, label: `${MONTHS[lm - 1]} ${ly}` }
+  }
+  if (period === 'this_year') return { from: `${y}-01-01`, to: `${y}-12-31`, label: `${y}` }
+  if (period === 'last_year') return { from: `${y - 1}-01-01`, to: `${y - 1}-12-31`, label: `${y - 1}` }
+  if (period === 'custom') {
+    const from = customFrom || null
+    const to = customTo || null
+    let label = 'All time'
+    if (from && to) label = `${formatDate(from)} to ${formatDate(to)}`
+    else if (from) label = `from ${formatDate(from)}`
+    else if (to) label = `up to ${formatDate(to)}`
+    return { from, to, label }
+  }
+  return { from: null, to: null, label: 'All time' }
+}
+
+type SortField = 'last_name' | 'spend' | 'last_purchase_date'
 
 function SortArrow({ field, sortField, sortDirection }: { field: SortField; sortField: SortField; sortDirection: 'asc' | 'desc' }) {
   if (sortField !== field) return null
@@ -52,11 +112,11 @@ function escapeCsvCell(value: string): string {
   return value
 }
 
-function exportCSV(data: Client[]) {
+function exportCSV(data: ClientRow[], spendLabel: string) {
   const today = new Date().toISOString().split('T')[0]
   const headers = [
     'First Name', 'Last Name', 'Email', 'Alt Email', 'Phone',
-    'Country', 'Status', 'Assigned To', 'Source Channel', 'Total Spend', 'Last Purchase Date',
+    'Country', 'Status', 'Assigned To', 'Source Channel', spendLabel, 'Last Purchase Date',
   ]
   const rows = data.map(c => [
     c.first_name ?? '',
@@ -68,7 +128,7 @@ function exportCSV(data: Client[]) {
     c.status,
     c.assigned_to,
     c.source_channel ?? '',
-    formatGBP(c.total_spend),
+    formatGBP(c.spend),
     c.last_purchase_date ?? '',
   ])
   const csv = [headers, ...rows]
@@ -95,6 +155,9 @@ export default function ClientsPage() {
   const [assignedFilter, setAssignedFilter] = useState('all')
   const [categoryFilter, setCategoryFilter] = useState('all')
   const [minSpend, setMinSpend] = useState('')
+  const [period, setPeriod] = useState<Period>('all')
+  const [customFrom, setCustomFrom] = useState('')
+  const [customTo, setCustomTo] = useState('')
 
   // Sort
   const [sortField, setSortField] = useState<SortField>('last_name')
@@ -130,8 +193,34 @@ export default function ClientsPage() {
     setCurrentPage(1)
   }
 
+  // Spend and last purchase for the chosen category and period
+  const range = periodRange(period, customFrom, customTo)
+  const selectionActive = categoryFilter !== 'all' || range.from !== null || range.to !== null
+  const spendLabel = [
+    'Spend',
+    [categoryFilter !== 'all' ? CATEGORY_LABELS[categoryFilter] ?? categoryFilter : null, range.label !== 'All time' ? range.label : null]
+      .filter(Boolean)
+      .join(', '),
+  ].filter(Boolean).join(': ') || 'Spend'
+  const columnLabel = selectionActive ? spendLabel : 'Total Spend'
+
+  const rows: ClientRow[] = allClients.map(c => {
+    let spend = 0
+    let last: string | null = null
+    let matches = 0
+    for (const p of c.purchases) {
+      if (categoryFilter !== 'all' && p.c !== categoryFilter) continue
+      if (range.from && p.d < range.from) continue
+      if (range.to && p.d > range.to) continue
+      spend += p.a
+      matches++
+      if (!last || p.d > last) last = p.d
+    }
+    return { ...c, spend, last_purchase_date: last, matches }
+  })
+
   // Filter
-  const filtered = allClients.filter(c => {
+  const filtered = rows.filter(c => {
     const q = search.toLowerCase()
     if (q) {
       const name = `${c.first_name ?? ''} ${c.last_name ?? ''}`.toLowerCase()
@@ -139,9 +228,10 @@ export default function ClientsPage() {
     }
     if (statusFilter !== 'all' && c.status !== statusFilter) return false
     if (assignedFilter !== 'all' && c.assigned_to !== assignedFilter) return false
-    if (categoryFilter !== 'all' && !c.categories.includes(categoryFilter)) return false
+    // With a category or period chosen, list only clients who bought in that selection
+    if (selectionActive && c.matches === 0) return false
     const spend = parseFloat(minSpend)
-    if (!isNaN(spend) && spend > 0 && c.total_spend < spend) return false
+    if (!isNaN(spend) && spend > 0 && c.spend < spend) return false
     return true
   })
 
@@ -150,8 +240,8 @@ export default function ClientsPage() {
     let cmp = 0
     if (sortField === 'last_name') {
       cmp = (a.last_name ?? '').localeCompare(b.last_name ?? '')
-    } else if (sortField === 'total_spend') {
-      cmp = a.total_spend - b.total_spend
+    } else if (sortField === 'spend') {
+      cmp = a.spend - b.spend
     } else {
       // last_purchase_date — nulls last in both directions
       const aDate = a.last_purchase_date
@@ -200,6 +290,7 @@ export default function ClientsPage() {
               {filtered.length === allClients.length
                 ? `${allClients.length} clients`
                 : `Showing ${filtered.length} of ${allClients.length} clients`}
+              {selectionActive && <span className="md:hidden"> ({columnLabel})</span>}
             </p>
             <div className="flex items-center gap-2">
               <span className="text-sm text-muted">Rows per page:</span>
@@ -260,6 +351,37 @@ export default function ClientsPage() {
               <option value="private">Private</option>
               <option value="other">Other</option>
             </select>
+            <select
+              value={period}
+              onChange={e => { setPeriod(e.target.value as Period); setCurrentPage(1) }}
+              className={`${inputCls} min-h-[44px] md:min-h-9`}
+              aria-label="Period"
+            >
+              <option value="all">All time</option>
+              <option value="this_month">This month</option>
+              <option value="last_month">Last month</option>
+              <option value="this_year">This year</option>
+              <option value="last_year">Last year</option>
+              <option value="custom">Custom dates</option>
+            </select>
+            {period === 'custom' && (
+              <div className="flex items-center gap-2 flex-wrap">
+                <label className="text-sm text-muted">From</label>
+                <input
+                  type="date"
+                  value={customFrom}
+                  onChange={e => { setCustomFrom(e.target.value); setCurrentPage(1) }}
+                  className={`${inputCls} min-h-[44px] md:min-h-9`}
+                />
+                <label className="text-sm text-muted">To</label>
+                <input
+                  type="date"
+                  value={customTo}
+                  onChange={e => { setCustomTo(e.target.value); setCurrentPage(1) }}
+                  className={`${inputCls} min-h-[44px] md:min-h-9`}
+                />
+              </div>
+            )}
             <div className="flex items-center gap-2">
               <label className="text-sm text-muted whitespace-nowrap">Min spend £</label>
               <input
@@ -292,9 +414,9 @@ export default function ClientsPage() {
                 ))}
                 <th
                   className={`${thCls} text-right cursor-pointer select-none whitespace-nowrap`}
-                  onClick={() => handleSort('total_spend')}
+                  onClick={() => handleSort('spend')}
                 >
-                  Total Spend <SortArrow field="total_spend" sortField={sortField} sortDirection={sortDirection} />
+                  {columnLabel} <SortArrow field="spend" sortField={sortField} sortDirection={sortDirection} />
                 </th>
                 <th
                   className={`${thCls} cursor-pointer select-none whitespace-nowrap`}
@@ -316,7 +438,7 @@ export default function ClientsPage() {
                   <td><StatusBadge status={client.status} /></td>
                   <td className="text-muted text-sm max-w-[140px] truncate">{client.source_channel ?? '—'}</td>
                   <td className="text-sm text-body">{client.assigned_to}</td>
-                  <td className="text-sm text-right font-medium text-heading">{formatCurrency(client.total_spend)}</td>
+                  <td className="text-sm text-right font-medium text-heading">{formatCurrency(client.spend)}</td>
                   <td className="text-muted text-sm">{formatDate(client.last_purchase_date)}</td>
                 </tr>
               ))}
@@ -346,7 +468,7 @@ export default function ClientsPage() {
             </div>
             <p className="text-muted text-sm mt-1">{client.email}</p>
             <div className="flex items-center justify-between mt-2">
-              <span className="text-sm font-semibold text-accent">{formatCurrency(client.total_spend)}</span>
+              <span className="text-sm font-semibold text-accent">{formatCurrency(client.spend)}</span>
               <span className="text-xs text-muted">{formatDate(client.last_purchase_date)}</span>
             </div>
           </Link>
@@ -376,7 +498,7 @@ export default function ClientsPage() {
           </button>
         </div>
         <div className="flex justify-end">
-          <button onClick={() => exportCSV(sorted)} className="btn-secondary">
+          <button onClick={() => exportCSV(sorted, columnLabel)} className="btn-secondary">
             Export CSV
           </button>
         </div>
@@ -403,7 +525,7 @@ export default function ClientsPage() {
             Next
           </button>
         </div>
-        <button onClick={() => exportCSV(sorted)} className="btn-secondary w-full">
+        <button onClick={() => exportCSV(sorted, columnLabel)} className="btn-secondary w-full">
           Export CSV
         </button>
       </div>
