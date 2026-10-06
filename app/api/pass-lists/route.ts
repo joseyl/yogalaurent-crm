@@ -6,7 +6,11 @@ import {
   londonToday,
   toLondonDate,
   addDays,
-  type ClassPassPurchase,
+  num,
+  isRenewed,
+  passHolderNames,
+  PASS_SNAPSHOT_COLUMNS as COLUMNS,
+  type PassSnapshotRow,
 } from '@/lib/passRenewals'
 
 export const dynamic = 'force-dynamic'
@@ -19,23 +23,6 @@ export const dynamic = 'force-dynamic'
 
 const LOW_CREDITS = 1.5
 const EXPIRED_WINDOW_DAYS = 60
-// A purchase only counts as a renewal if it is dated this many days or more
-// after the pass's start date. This stops a pass's own purchase counting as
-// its renewal (Momence start dates are UTC timestamps, so a pass bought just
-// after midnight UK time can start "the day before" its CRM purchase date).
-const RENEWAL_MIN_DAYS_AFTER_START = 2
-
-interface PassSnapshotRow {
-  snapshot_date: string
-  momence_member_id: string | null
-  momence_bought_membership_id: string
-  person_id: string | null
-  name: string | null
-  start_date: string | null
-  end_date: string | null
-  credits_left: number | string | null
-  credits_total: number | string | null
-}
 
 export interface PassListRow {
   passId: string
@@ -44,23 +31,6 @@ export interface PassListRow {
   passName: string | null
   creditsLeft: number
   endDate: string | null
-}
-
-const COLUMNS =
-  'snapshot_date, momence_member_id, momence_bought_membership_id, person_id, name, start_date, end_date, credits_left, credits_total'
-
-function num(v: number | string | null): number | null {
-  if (v === null || v === undefined || v === '') return null
-  const n = Number(v)
-  return Number.isFinite(n) ? n : null
-}
-
-function isRenewed(pass: PassSnapshotRow, purchases: ClassPassPurchase[]): boolean {
-  if (!pass.person_id) return false
-  const start = toLondonDate(pass.start_date)
-  if (!start) return false
-  const threshold = addDays(start, RENEWAL_MIN_DAYS_AFTER_START)
-  return purchases.some(p => p.person_id === pass.person_id && p.purchase_date >= threshold)
 }
 
 export async function GET() {
@@ -137,50 +107,13 @@ export async function GET() {
     const expiredKept = expiredCandidates.filter(r => !isRenewed(r, purchases))
 
     // Names: CRM client name when linked, otherwise the name Momence gave on bookings
-    const personIds = [...new Set([...lowKept, ...expiredKept].map(r => r.person_id).filter((id): id is string => !!id))]
-    const unlinkedMemberIds = [
-      ...new Set(
-        [...lowKept, ...expiredKept]
-          .filter(r => !r.person_id && r.momence_member_id)
-          .map(r => r.momence_member_id as string),
-      ),
-    ]
-
-    const [peopleRes, memberNames] = await Promise.all([
-      personIds.length
-        ? supabaseAdmin.from('people').select('id, first_name, last_name').in('id', personIds)
-        : Promise.resolve({ data: [], error: null }),
-      unlinkedMemberIds.length
-        ? fetchAll<{ momence_member_id: string; first_name: string | null; last_name: string | null }>(() =>
-            supabaseAdmin
-              .from('attendance_v2')
-              .select('momence_member_id, first_name, last_name')
-              .in('momence_member_id', unlinkedMemberIds)
-              .order('class_date', { ascending: false }),
-          )
-        : Promise.resolve([]),
-    ])
-    if (peopleRes.error) throw peopleRes.error
-
-    const personName = new Map<string, string>()
-    for (const p of peopleRes.data ?? []) {
-      personName.set(p.id, [p.first_name, p.last_name].filter(Boolean).join(' '))
-    }
-    const memberName = new Map<string, string>()
-    for (const m of memberNames) {
-      if (memberName.has(m.momence_member_id)) continue
-      const n = [m.first_name, m.last_name].filter(Boolean).join(' ')
-      if (n) memberName.set(m.momence_member_id, n)
-    }
+    const nameOf = await passHolderNames([...lowKept, ...expiredKept])
 
     function toRow(r: PassSnapshotRow): PassListRow {
-      const name = r.person_id
-        ? personName.get(r.person_id) || 'Unknown'
-        : (r.momence_member_id && memberName.get(r.momence_member_id)) || 'Unknown Momence member'
       return {
         passId: r.momence_bought_membership_id,
         personId: r.person_id,
-        name,
+        name: nameOf(r),
         passName: r.name,
         creditsLeft: num(r.credits_left) ?? 0,
         endDate: toLondonDate(r.end_date),

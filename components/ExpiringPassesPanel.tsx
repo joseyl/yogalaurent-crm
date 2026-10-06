@@ -4,34 +4,31 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import Collapsible from '@/components/ui/Collapsible'
 
-interface PassRow {
-  id: string
-  expires_at: string
-  people: {
-    id: string
-    first_name: string | null
-    last_name: string | null
-  } | null
-  products: {
-    name: string
-  } | null
+interface ExpiringPassRow {
+  passId: string
+  personId: string | null
+  name: string
+  passName: string | null
+  creditsLeft: number | null
+  endDate: string
+  daysLeft: number
+  missingFromLatest: boolean
 }
 
 function formatDate(dateStr: string): string {
-  return new Date(dateStr).toLocaleDateString('en-GB', {
+  return new Date(`${dateStr}T12:00:00Z`).toLocaleDateString('en-GB', {
     day: 'numeric',
     month: 'short',
     year: 'numeric',
   })
 }
 
-function daysUntil(dateStr: string): number {
-  const expiry = new Date(dateStr).getTime()
-  return Math.floor((expiry - Date.now()) / 86400000)
+function formatCredits(n: number): string {
+  return Number.isInteger(n) ? String(n) : n.toFixed(1)
 }
 
 export default function ExpiringPassesPanel() {
-  const [passes, setPasses] = useState<PassRow[]>([])
+  const [passes, setPasses] = useState<ExpiringPassRow[]>([])
   const [loaded, setLoaded] = useState(false)
   const [failed, setFailed] = useState(false)
 
@@ -46,22 +43,13 @@ export default function ExpiringPassesPanel() {
       .finally(() => setLoaded(true))
   }, [])
 
-  async function dismiss(purchaseId: string) {
-    await fetch('/api/expiring-passes', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ purchaseId }),
-    })
-    setPasses(prev => prev.filter(p => p.id !== purchaseId))
-  }
-
   const count = !loaded ? '-' : failed ? '!' : passes.length
   const tone = failed ? 'danger' : loaded && passes.length > 0 ? 'warning' : 'neutral'
 
   return (
     <Collapsible title="Class Passes: Expiring" count={count} tone={tone}>
       <p className="text-xs text-muted mb-3">
-        Passes expiring within 15 days or expired in the last 30 days. Hidden if the person has bought another class pass since.
+        Passes ending within 15 days or ended in the last 30 days, using the end date in Momence. Hidden if the person has bought another class pass since the pass started.
       </p>
 
       {!loaded ? (
@@ -74,39 +62,45 @@ export default function ExpiringPassesPanel() {
         <p className="text-sm text-muted">Nothing to action.</p>
       ) : (
         passes.map(pass => {
-          const days = daysUntil(pass.expires_at)
-          const expired = days < 0
-          const fullName = [pass.people?.first_name, pass.people?.last_name]
-            .filter(Boolean)
-            .join(' ')
+          const expired = pass.daysLeft < 0
+          const status = expired
+            ? 'Expired'
+            : pass.daysLeft === 0
+              ? 'Expires today'
+              : `Expires in ${pass.daysLeft}d`
 
           return (
             <div
-              key={pass.id}
+              key={pass.passId}
               className="flex items-center justify-between py-2 border-b border-card-border last:border-0 gap-2"
             >
-              <Link
-                href={`/clients/${pass.people?.id}`}
-                className="text-sm font-medium text-heading hover:text-accent hover:underline shrink-0"
-              >
-                {fullName || 'Unknown'}
-              </Link>
-              <span className="text-xs text-muted hidden sm:block truncate flex-1">
-                {pass.products?.name}
-              </span>
-              <span className="text-xs text-muted shrink-0">{formatDate(pass.expires_at)}</span>
+              {pass.personId ? (
+                <Link
+                  href={`/clients/${pass.personId}`}
+                  className="text-sm font-medium text-heading hover:text-accent hover:underline shrink-0"
+                >
+                  {pass.name}
+                </Link>
+              ) : (
+                <span className="text-sm font-medium text-heading shrink-0">
+                  {pass.name}
+                  <span className="block text-xs font-normal text-muted">Not linked to a client</span>
+                </span>
+              )}
+              <span className="text-xs text-muted hidden sm:block truncate flex-1">{pass.passName}</span>
+              {pass.creditsLeft !== null && (
+                <span className="text-xs text-muted shrink-0">
+                  {formatCredits(pass.creditsLeft)} {pass.creditsLeft === 1 ? 'credit' : 'credits'} left
+                  {pass.missingFromLatest ? ' (last known)' : ''}
+                </span>
+              )}
+              <span className="text-xs text-muted shrink-0">{formatDate(pass.endDate)}</span>
               <span
                 className="text-xs font-medium shrink-0"
                 style={{ color: expired ? 'var(--color-red-vivid)' : 'var(--color-amber-vivid)' }}
               >
-                {expired ? 'Expired' : `Expires in ${days}d`}
+                {status}
               </span>
-              <button
-                onClick={() => dismiss(pass.id)}
-                className="btn-secondary shrink-0 text-xs"
-              >
-                Dismiss
-              </button>
             </div>
           )
         })
