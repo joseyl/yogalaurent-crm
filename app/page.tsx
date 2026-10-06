@@ -88,6 +88,7 @@ async function fetchDashboardData() {
     { data: latestSync, error: latestSyncError },
     { data: webhookProblems, count: webhookProblemCount, error: webhookError },
     { data: futureRows, count: futureCount, error: futureError },
+    { data: unmatchedRows, count: unmatchedCount, error: unmatchedError },
   ] = await Promise.all([
     supabase.from('people').select('*', { count: 'exact', head: true }).eq('status', 'client'),
     supabase.from('leads').select('*', { count: 'exact', head: true }).in('status', ['new', 'contacted', 'quoted']),
@@ -112,6 +113,9 @@ async function fetchDashboardData() {
     supabase.from('sync_runs').select('status,finished_at,error,started_at').order('started_at', { ascending: false }).limit(1).maybeSingle(),
     supabase.from('webhook_log').select('created_at, source, event_type, status, error_message', { count: 'exact' }).in('status', ['failed', 'skipped']).gte('created_at', sevenDaysAgoIso).order('created_at', { ascending: false }).limit(20),
     supabase.from('purchases').select('id, person_id, purchase_date, amount_gbp, people(first_name, last_name), products(name)', { count: 'exact' }).gt('purchase_date', today).order('purchase_date', { ascending: true }).limit(500),
+    // Training plan instalments that could not be matched to an order
+    // (table training_payments, supabase/migrations/007_training_instalments.sql)
+    supabase.from('training_payments').select('id, paid_at, created_at, amount_gbp, order_ref, note', { count: 'exact' }).eq('status', 'unmatched').order('created_at', { ascending: false }).limit(50),
   ])
 
   // Summary
@@ -231,6 +235,12 @@ async function fetchDashboardData() {
       count: webhookProblemCount ?? 0,
       rows: (webhookProblems ?? []) as { created_at: string; source: string; event_type: string; status: string; error_message: string | null }[],
     },
+    // ok is false if the check could not be read, so the page never shows a false 0
+    unmatchedCheck: {
+      ok: !unmatchedError && unmatchedCount !== null,
+      count: unmatchedCount ?? 0,
+      rows: (unmatchedRows ?? []) as { id: string; paid_at: string | null; created_at: string; amount_gbp: number | string; order_ref: string | null; note: string | null }[],
+    },
     // ok is false if the check could not be read, so the page never hides a problem
     futureCheck: {
       ok: !futureError && futureCount !== null,
@@ -242,7 +252,7 @@ async function fetchDashboardData() {
 }
 
 export default async function DashboardPage() {
-  const { summary, staleLeads, goneQuiet, categoryRevenue, trend, latestSync, latestSyncUnavailable, webhookCheck, futureCheck } = await fetchDashboardData()
+  const { summary, staleLeads, goneQuiet, categoryRevenue, trend, latestSync, latestSyncUnavailable, webhookCheck, unmatchedCheck, futureCheck } = await fetchDashboardData()
 
   const dotColor = latestSyncUnavailable
     ? 'var(--color-amber-vivid)'
@@ -448,6 +458,45 @@ export default async function DashboardPage() {
                 ))}
                 {webhookCheck.count > webhookCheck.rows.length && (
                   <li className="text-xs text-muted">Showing latest {webhookCheck.rows.length}</li>
+                )}
+              </ul>
+            </Collapsible>
+          </div>
+        )}
+
+        {/* Training plan instalments not matched to an order (stays until fixed, not just 7 days) */}
+        <div className="card flex items-center gap-3 p-4 mb-6">
+          <span
+            className="w-2.5 h-2.5 flex-shrink-0 rounded-full"
+            style={{
+              background: !unmatchedCheck.ok
+                ? 'var(--color-amber-vivid)'
+                : unmatchedCheck.count === 0
+                ? 'var(--color-green-vivid)'
+                : 'var(--color-red-vivid)',
+            }}
+          />
+          <p className="text-sm text-body">
+            {!unmatchedCheck.ok
+              ? 'Instalment check unavailable'
+              : unmatchedCheck.count === 0
+              ? 'Training instalments: all matched to an order'
+              : `Instalments not matched to an order: ${unmatchedCheck.count}`}
+          </p>
+        </div>
+
+        {unmatchedCheck.ok && unmatchedCheck.count > 0 && (
+          <div className="mb-6">
+            <Collapsible title="Instalments not matched" count={unmatchedCheck.count} tone="danger">
+              <ul className="space-y-2 px-4 pb-4 text-sm text-body md:px-5">
+                {unmatchedCheck.rows.map(r => (
+                  <li key={r.id}>
+                    {formatUKDateTime(r.paid_at ?? r.created_at)}, {formatGBP(Number(r.amount_gbp ?? 0))}, {r.order_ref ?? 'no orderRef'}
+                    {r.note && <span className="block text-xs text-muted">{r.note}</span>}
+                  </li>
+                ))}
+                {unmatchedCheck.count > unmatchedCheck.rows.length && (
+                  <li className="text-xs text-muted">Showing latest {unmatchedCheck.rows.length}</li>
                 )}
               </ul>
             </Collapsible>
