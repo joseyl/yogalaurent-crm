@@ -122,7 +122,7 @@ export async function POST(request: NextRequest) {
         source: 'momence',
         event_type: 'class_booking',
         payload: body,
-        status: 'error',
+        status: 'failed',
         person_id: personId,
         error_message: msg,
       })

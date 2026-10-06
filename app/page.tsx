@@ -105,7 +105,9 @@ async function fetchDashboardData() {
     ),
     supabase.from('people').select('id, first_name, last_name').eq('status', 'client'),
     supabase.from('purchases').select('amount_gbp, products(category)').gte('purchase_date', firstOfMonth).lte('purchase_date', today),
-    supabase.from('people').select('created_at').eq('status', 'client').gte('created_at', elevenMonthsAgo),
+    // New Clients line: each client dated by first purchase, else first class, else load date
+    // (view client_first_activity, supabase/migrations/005_client_first_activity.sql)
+    supabase.from('client_first_activity').select('became_client').gte('became_client', elevenMonthsAgo),
     supabase.from('leads').select('date_added').gte('date_added', elevenMonthsAgo),
     supabase.from('sync_runs').select('status,finished_at,error,started_at').order('started_at', { ascending: false }).limit(1).maybeSingle(),
     supabase.from('webhook_log').select('created_at, source, event_type, status, error_message', { count: 'exact' }).in('status', ['failed', 'skipped']).gte('created_at', sevenDaysAgoIso).order('created_at', { ascending: false }).limit(20),
@@ -180,12 +182,12 @@ async function fetchDashboardData() {
   // Trend chart
   const trend: Array<{ month: string; new_clients: number; new_leads: number }> = []
   for (let i = 11; i >= 0; i--) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
+    const d = new Date(londonYear, londonMonth - i, 1)
     trend.push({ month: monthLabel(d.getFullYear(), d.getMonth()), new_clients: 0, new_leads: 0 })
   }
   for (const c of clientsData ?? []) {
-    const d = new Date(c.created_at)
-    const label = monthLabel(d.getFullYear(), d.getMonth())
+    const [yr, mo] = (c.became_client as string).split('-').map(Number)
+    const label = monthLabel(yr, mo - 1)
     const entry = trend.find(m => m.month === label)
     if (entry) entry.new_clients++
   }
