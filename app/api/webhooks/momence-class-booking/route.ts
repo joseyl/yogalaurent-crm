@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { validateWebhookSecret } from '@/lib/webhook-auth'
 import { findOrCreatePerson } from '@/lib/find-or-create-person'
 import { supabaseAdmin } from '@/lib/supabase-admin'
+import { londonDateOf } from '@/lib/passRenewals'
 
 export async function GET() {
   return NextResponse.json({ status: 'ok', route: 'momence-class-booking' })
@@ -99,7 +100,11 @@ export async function POST(request: NextRequest) {
       console.error(`[momence-webhook] ${msg}`)
       return NextResponse.json({ error: msg }, { status: 400 })
     }
-    const purchaseDate = parsedDate.toISOString().split('T')[0]
+    // Dated by the day the payment message arrives (London), not the class date.
+    // The CRM dates every purchase by order date; dating by class date put
+    // advance bookings in the future.
+    const purchaseDate = londonDateOf(new Date())
+    const classLondonDate = londonDateOf(parsedDate)
 
     // Look up the drop-in product
     const { data: product, error: productError } = await supabaseAdmin
@@ -124,52 +129,46 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: msg }, { status: 400 })
     }
 
-    const { data: existingPurchase } = await supabaseAdmin
-      .from('purchases')
-      .select('id')
-      .eq('person_id', personId)
-      .eq('product_id', productId)
-      .eq('purchase_date', purchaseDate)
-      .maybeSingle()
+    const noteParts = [`Drop-in payment via Momence webhook. Class: ${className}, class date ${classLondonDate}`]
+    if (saleValueIsNaN) noteParts.push('amount could not be parsed from webhook')
+    const notes = noteParts.join('; ')
 
-    if (existingPurchase) {
-      purchaseSkipReason = 'duplicate: purchase already exists for this person, product, and date'
-    } else {
-      const noteParts = [`Drop-in payment via Momence webhook. Class: ${className}`]
-      if (saleValueIsNaN) noteParts.push('amount could not be parsed from webhook')
-      const notes = noteParts.join('; ')
+    // Check and write in one locked step in the database (see
+    // supabase/migrations/004_record_momence_class_payment.sql). A Momence course
+    // checkout sends one message per session within a second, each with the full
+    // course price; only the first is recorded.
+    const { data: recordStatus, error: recordError } = await supabaseAdmin.rpc(
+      'record_momence_class_payment',
+      {
+        p_person_id: personId,
+        p_product_id: productId,
+        p_amount: saleValue,
+        p_purchase_date: purchaseDate,
+        p_notes: notes,
+      },
+    )
 
-      const { error: purchaseError } = await supabaseAdmin.from('purchases').insert({
+    if (recordError) {
+      console.error('[momence-webhook] Purchase record failed', recordError)
+      await supabaseAdmin.from('webhook_log').insert({
+        source: 'momence',
+        event_type: 'class_booking',
+        payload: body,
+        status: 'failed',
         person_id: personId,
-        product_id: productId,
-        amount_gbp: saleValue,
-        purchase_date: purchaseDate,
-        notes,
+        error_message: `Purchase record failed: ${recordError.message}`,
       })
+      return NextResponse.json({ error: 'Purchase record failed' }, { status: 500 })
+    }
 
-      if (purchaseError) {
-        console.error('[momence-webhook] Purchase insert failed', purchaseError)
-        await supabaseAdmin.from('webhook_log').insert({
-          source: 'momence',
-          event_type: 'class_booking',
-          payload: body,
-          status: 'error',
-          person_id: personId,
-          error_message: `Purchase insert failed: ${purchaseError.message}`,
-        })
-        return NextResponse.json(
-          {
-            error: 'Purchase insert failed',
-            code: purchaseError.code,
-            message: purchaseError.message,
-            details: purchaseError.details,
-            hint: purchaseError.hint,
-          },
-          { status: 500 },
-        )
-      }
-
+    if (recordStatus === 'created') {
       purchaseCreated = true
+    } else if (recordStatus === 'duplicate') {
+      purchaseSkipReason = 'duplicate: this booking was already recorded'
+    } else if (recordStatus === 'same_order') {
+      purchaseSkipReason = 'same order: part of a course or multi-session checkout already recorded in the last 15 seconds'
+    } else {
+      purchaseSkipReason = `unexpected result from record_momence_class_payment: ${String(recordStatus)}`
     }
   }
 

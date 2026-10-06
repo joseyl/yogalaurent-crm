@@ -9,6 +9,7 @@ import { fetchAll } from '@/lib/fetchAll'
 import PageHeader from '@/components/ui/PageHeader'
 import KpiCard from '@/components/ui/KpiCard'
 import Collapsible from '@/components/ui/Collapsible'
+import { londonToday } from '@/lib/passRenewals'
 
 export const dynamic = 'force-dynamic'
 
@@ -62,9 +63,11 @@ async function fetchDashboardData() {
   // Date.UTC handles month overflow (e.g. month 12 or month -2) correctly.
   const { year: londonYear, month: londonMonth } = londonYearMonth(now)
   const firstOfMonth    = new Date(Date.UTC(londonYear, londonMonth,      1)).toISOString().split('T')[0]
-  const firstOfNextMonth = new Date(Date.UTC(londonYear, londonMonth + 1,  1)).toISOString().split('T')[0]
   const firstOfYear     = new Date(Date.UTC(londonYear, 0,                1)).toISOString().split('T')[0]
-  const firstOfNextYear = new Date(Date.UTC(londonYear + 1, 0,            1)).toISOString().split('T')[0]
+  // Revenue counts purchases dated from the 1st up to and including today (London).
+  // A purchase dated after today is a data error (the CRM dates by order date) and is
+  // shown separately below the revenue cards, never added to the totals.
+  const today = londonToday()
   const sevenDaysAgo = daysAgo(7)
   const sevenDaysAgoIso = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString()
   const twentyEightDaysAgo = daysAgo(28)
@@ -84,11 +87,12 @@ async function fetchDashboardData() {
     { data: leadsData },
     { data: latestSync, error: latestSyncError },
     { data: webhookProblems, count: webhookProblemCount, error: webhookError },
+    { data: futureRows, count: futureCount, error: futureError },
   ] = await Promise.all([
     supabase.from('people').select('*', { count: 'exact', head: true }).eq('status', 'client'),
     supabase.from('leads').select('*', { count: 'exact', head: true }).in('status', ['new', 'contacted', 'quoted']),
-    supabase.from('purchases').select('amount_gbp, products(entity)').gte('purchase_date', firstOfMonth).lt('purchase_date', firstOfNextMonth),
-    supabase.from('purchases').select('amount_gbp, products(entity)').gte('purchase_date', firstOfYear).lt('purchase_date', firstOfNextYear),
+    supabase.from('purchases').select('amount_gbp, products(entity)').gte('purchase_date', firstOfMonth).lte('purchase_date', today),
+    supabase.from('purchases').select('amount_gbp, products(entity)').gte('purchase_date', firstOfYear).lte('purchase_date', today),
     supabase.from('leads').select('id, last_followup_date, date_added, assigned_to, people(first_name, last_name)').in('status', ['new', 'contacted', 'quoted']),
     fetchAll<{ person_id: string; class_date: string }>(
       () => supabase
@@ -100,11 +104,12 @@ async function fetchDashboardData() {
         .not('person_id', 'is', null)
     ),
     supabase.from('people').select('id, first_name, last_name').eq('status', 'client'),
-    supabase.from('purchases').select('amount_gbp, products(category)').gte('purchase_date', firstOfMonth).lt('purchase_date', firstOfNextMonth),
+    supabase.from('purchases').select('amount_gbp, products(category)').gte('purchase_date', firstOfMonth).lte('purchase_date', today),
     supabase.from('people').select('created_at').eq('status', 'client').gte('created_at', elevenMonthsAgo),
     supabase.from('leads').select('date_added').gte('date_added', elevenMonthsAgo),
     supabase.from('sync_runs').select('status,finished_at,error,started_at').order('started_at', { ascending: false }).limit(1).maybeSingle(),
     supabase.from('webhook_log').select('created_at, source, event_type, status, error_message', { count: 'exact' }).in('status', ['failed', 'skipped']).gte('created_at', sevenDaysAgoIso).order('created_at', { ascending: false }).limit(20),
+    supabase.from('purchases').select('id, person_id, purchase_date, amount_gbp, people(first_name, last_name), products(name)', { count: 'exact' }).gt('purchase_date', today).order('purchase_date', { ascending: true }).limit(500),
   ])
 
   // Summary
@@ -191,6 +196,24 @@ async function fetchDashboardData() {
     if (entry) entry.new_leads++
   }
 
+  // Purchases dated after today
+  type FutureRow = {
+    id: string
+    person_id: string | null
+    purchase_date: string
+    amount_gbp: number | string | null
+    people: { first_name: string | null; last_name: string | null } | null
+    products: { name: string | null } | null
+  }
+  const futureList = ((futureRows ?? []) as unknown as FutureRow[]).map(r => ({
+    id: r.id,
+    personId: r.person_id,
+    name: [r.people?.first_name, r.people?.last_name].filter(Boolean).join(' ') || 'Unknown client',
+    product: r.products?.name ?? 'Unknown product',
+    date: r.purchase_date,
+    amount: Number(r.amount_gbp ?? 0),
+  }))
+
   return {
     summary: { activeClients: activeClients ?? 0, openLeads: openLeads ?? 0, revenueThisMonth, revenueThisMonthLR, revenueThisMonthTTL, revenueThisYear, revenueThisYearLR, revenueThisYearTTL },
     staleLeads,
@@ -206,11 +229,18 @@ async function fetchDashboardData() {
       count: webhookProblemCount ?? 0,
       rows: (webhookProblems ?? []) as { created_at: string; source: string; event_type: string; status: string; error_message: string | null }[],
     },
+    // ok is false if the check could not be read, so the page never hides a problem
+    futureCheck: {
+      ok: !futureError && futureCount !== null,
+      count: futureCount ?? 0,
+      total: futureList.reduce((sum, r) => sum + r.amount, 0),
+      rows: futureList,
+    },
   }
 }
 
 export default async function DashboardPage() {
-  const { summary, staleLeads, goneQuiet, categoryRevenue, trend, latestSync, latestSyncUnavailable, webhookCheck } = await fetchDashboardData()
+  const { summary, staleLeads, goneQuiet, categoryRevenue, trend, latestSync, latestSyncUnavailable, webhookCheck, futureCheck } = await fetchDashboardData()
 
   const dotColor = latestSyncUnavailable
     ? 'var(--color-amber-vivid)'
@@ -263,6 +293,43 @@ export default async function DashboardPage() {
           </div>
         </KpiCard>
       </div>
+
+      {/* Purchases dated after today: a data error, shown so it gets fixed */}
+      {!futureCheck.ok ? (
+        <div className="card flex items-center gap-3 p-4 mb-6">
+          <span className="w-2.5 h-2.5 flex-shrink-0 rounded-full" style={{ background: 'var(--color-amber-vivid)' }} />
+          <p className="text-sm text-body">Check for purchases dated after today unavailable</p>
+        </div>
+      ) : futureCheck.count > 0 ? (
+        <div className="mb-6">
+          <Collapsible
+            title={`${futureCheck.count === 1 ? 'Purchase' : 'Purchases'} dated after today (${formatGBP(futureCheck.total)}), check the dates`}
+            count={futureCheck.count}
+            tone="warning"
+          >
+            <ul className="space-y-2 text-sm text-body">
+              {futureCheck.rows.map(r => (
+                <li key={r.id} className="flex flex-wrap items-baseline justify-between gap-x-3 border-b border-card-border pb-2 last:border-0">
+                  <span>
+                    {r.personId ? (
+                      <Link href={`/clients/${r.personId}`} className="font-medium text-heading underline">{r.name}</Link>
+                    ) : (
+                      <span className="font-medium text-heading">{r.name}</span>
+                    )}
+                    <span className="block text-xs text-muted">{r.product}</span>
+                  </span>
+                  <span className="text-xs text-muted">
+                    {new Intl.DateTimeFormat('en-GB', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' }).format(new Date(`${r.date}T00:00:00Z`))}, {formatGBP(r.amount)}
+                  </span>
+                </li>
+              ))}
+              {futureCheck.count > futureCheck.rows.length && (
+                <li className="text-xs text-muted">Showing the first {futureCheck.rows.length}; the total above covers only those.</li>
+              )}
+            </ul>
+          </Collapsible>
+        </div>
+      ) : null}
 
       {/* Alert panels */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
