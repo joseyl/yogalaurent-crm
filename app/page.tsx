@@ -70,6 +70,7 @@ async function fetchDashboardData() {
   const today = londonToday()
   const sevenDaysAgo = daysAgo(7)
   const sevenDaysAgoIso = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString()
+  const thirtyDaysAgoIso = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString()
   const twentyEightDaysAgo = daysAgo(28)
   const oneEightyDaysAgo = daysAgo(180)
   const elevenMonthsAgo = new Date(Date.UTC(londonYear, londonMonth - 11,  1)).toISOString().split('T')[0]
@@ -89,6 +90,8 @@ async function fetchDashboardData() {
     { data: webhookProblems, count: webhookProblemCount, error: webhookError },
     { data: futureRows, count: futureCount, error: futureError },
     { data: unmatchedRows, count: unmatchedCount, error: unmatchedError },
+    { data: toSortRows, count: toSortCount, error: toSortError },
+    { data: refundRows, error: refundError },
   ] = await Promise.all([
     supabase.from('people').select('*', { count: 'exact', head: true }).eq('status', 'client'),
     supabase.from('leads').select('*', { count: 'exact', head: true }).in('status', ['new', 'contacted', 'quoted']),
@@ -116,6 +119,10 @@ async function fetchDashboardData() {
     // Training plan instalments that could not be matched to an order
     // (table training_payments, supabase/migrations/007_training_instalments.sql)
     supabase.from('training_payments').select('id, paid_at, created_at, amount_gbp, order_ref, note', { count: 'exact' }).eq('status', 'unmatched').order('created_at', { ascending: false }).limit(50),
+    // Payment-link sales waiting to be sorted, and refunds: unmatched ones stay until fixed,
+    // the rest show for 30 days (supabase/migrations/008_payment_link_sales.sql)
+    supabase.from('payment_link_payments').select('id, paid_at, amount_gbp, amount_original, currency, description, note', { count: 'exact' }).eq('status', 'to_sort').order('paid_at', { ascending: false }).limit(50),
+    supabase.from('payment_link_refunds').select('id, refunded_at, updated_at, refunded_original, currency, status, kept_gbp, note').or(`status.eq.unmatched,updated_at.gte.${thirtyDaysAgoIso}`).order('updated_at', { ascending: false }).limit(100),
   ])
 
   // Summary
@@ -241,6 +248,19 @@ async function fetchDashboardData() {
       count: unmatchedCount ?? 0,
       rows: (unmatchedRows ?? []) as { id: string; paid_at: string | null; created_at: string; amount_gbp: number | string; order_ref: string | null; note: string | null }[],
     },
+    // ok is false if the check could not be read, so the page never shows a false 0
+    paymentLinkCheck: (() => {
+      type RefundRow = { id: string; refunded_at: string | null; updated_at: string; refunded_original: number | string; currency: string | null; status: string; kept_gbp: number | string | null; note: string | null }
+      const refunds = (refundRows ?? []) as RefundRow[]
+      const unmatchedRefunds = refunds.filter(r => r.status === 'unmatched')
+      return {
+        ok: !toSortError && toSortCount !== null && !refundError,
+        toSortCount: toSortCount ?? 0,
+        toSortRows: (toSortRows ?? []) as { id: string; paid_at: string; amount_gbp: number | string | null; amount_original: number | string | null; currency: string | null; description: string | null; note: string | null }[],
+        unmatchedRefunds,
+        recentRefunds: refunds.filter(r => r.status !== 'unmatched' && r.updated_at >= thirtyDaysAgoIso),
+      }
+    })(),
     // ok is false if the check could not be read, so the page never hides a problem
     futureCheck: {
       ok: !futureError && futureCount !== null,
@@ -252,7 +272,7 @@ async function fetchDashboardData() {
 }
 
 export default async function DashboardPage() {
-  const { summary, staleLeads, goneQuiet, categoryRevenue, trend, latestSync, latestSyncUnavailable, webhookCheck, unmatchedCheck, futureCheck } = await fetchDashboardData()
+  const { summary, staleLeads, goneQuiet, categoryRevenue, trend, latestSync, latestSyncUnavailable, webhookCheck, unmatchedCheck, paymentLinkCheck, futureCheck } = await fetchDashboardData()
 
   const dotColor = latestSyncUnavailable
     ? 'var(--color-amber-vivid)'
@@ -502,6 +522,82 @@ export default async function DashboardPage() {
             </Collapsible>
           </div>
         )}
+        {/* Payment-link sales waiting to be sorted, and refunds (stays until fixed, not just 7 days) */}
+        {(() => {
+          const toSort = paymentLinkCheck.toSortCount + paymentLinkCheck.unmatchedRefunds.length
+          const refundLabel: Record<string, string> = {
+            applied: 'purchase lowered',
+            waiting: 'waiting for its sale to be sorted',
+            not_counted: 'part payment, nothing changed',
+          }
+          return (
+            <>
+              <div className="card flex items-center gap-3 p-4 mb-6">
+                <span
+                  className="w-2.5 h-2.5 flex-shrink-0 rounded-full"
+                  style={{
+                    background: !paymentLinkCheck.ok
+                      ? 'var(--color-amber-vivid)'
+                      : toSort === 0
+                      ? 'var(--color-green-vivid)'
+                      : 'var(--color-red-vivid)',
+                  }}
+                />
+                <p className="text-sm text-body">
+                  {!paymentLinkCheck.ok
+                    ? 'Payment-link check unavailable'
+                    : toSort === 0
+                    ? 'Payment-link sales: nothing to sort'
+                    : `Payment-link sales to sort: ${toSort}`}
+                </p>
+              </div>
+
+              {paymentLinkCheck.ok && toSort > 0 && (
+                <div className="mb-6">
+                  <Collapsible title="Payment-link sales to sort" count={toSort} tone="danger">
+                    <ul className="space-y-2 px-4 pb-4 text-sm text-body md:px-5">
+                      {paymentLinkCheck.toSortRows.map(r => (
+                        <li key={r.id}>
+                          {formatUKDateTime(r.paid_at)},{' '}
+                          {r.amount_gbp !== null
+                            ? formatGBP(Number(r.amount_gbp))
+                            : `${r.amount_original ?? '?'} ${(r.currency ?? '').toUpperCase()}`}
+                          , {r.description ?? 'no description'}
+                          {r.note && <span className="block text-xs text-muted">{r.note}</span>}
+                        </li>
+                      ))}
+                      {paymentLinkCheck.toSortCount > paymentLinkCheck.toSortRows.length && (
+                        <li className="text-xs text-muted">Showing latest {paymentLinkCheck.toSortRows.length} sales</li>
+                      )}
+                      {paymentLinkCheck.unmatchedRefunds.map(r => (
+                        <li key={r.id}>
+                          Refund {formatUKDateTime(r.refunded_at ?? r.updated_at)}, {r.refunded_original} {(r.currency ?? '').toUpperCase()} in total
+                          {r.note && <span className="block text-xs text-muted">{r.note}</span>}
+                        </li>
+                      ))}
+                    </ul>
+                  </Collapsible>
+                </div>
+              )}
+
+              {paymentLinkCheck.ok && paymentLinkCheck.recentRefunds.length > 0 && (
+                <div className="mb-6">
+                  <Collapsible title="Payment-link refunds, last 30 days" count={paymentLinkCheck.recentRefunds.length} tone="warning">
+                    <ul className="space-y-2 px-4 pb-4 text-sm text-body md:px-5">
+                      {paymentLinkCheck.recentRefunds.map(r => (
+                        <li key={r.id}>
+                          {formatUKDateTime(r.refunded_at ?? r.updated_at)}, {r.refunded_original} {(r.currency ?? '').toUpperCase()} refunded in total,{' '}
+                          {refundLabel[r.status] ?? r.status}
+                          {r.status === 'applied' && r.kept_gbp !== null && <> (kept {formatGBP(Number(r.kept_gbp))})</>}
+                        </li>
+                      ))}
+                    </ul>
+                  </Collapsible>
+                </div>
+              )}
+            </>
+          )
+        })()}
       </div>
     </div>
   )
