@@ -4,7 +4,9 @@ import { fetchAll } from '@/lib/fetchAll'
 
 export const dynamic = 'force-dynamic'
 
-// Each client comes with their purchases (date, amount, category) so the Clients
+// Everyone except leads (leads have their own page). The Clients page shows
+// status Client by default; Inactive and Deceased are there to filter for.
+// Each person comes with their purchases (date, amount, category) so the Clients
 // page can work out spend for any category and period without reloading.
 // Purchases are read in pages: a single read stops at 1,000 rows.
 export async function GET() {
@@ -35,7 +37,7 @@ export async function GET() {
         supabase
           .from('people')
           .select('id, first_name, last_name, email, alt_email, phone, country, status, assigned_to, source_channel')
-          .eq('status', 'client')
+          .neq('status', 'lead')
           .order('last_name', { ascending: true })
           .order('first_name', { ascending: true })
           .order('id', { ascending: true }),

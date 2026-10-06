@@ -151,7 +151,7 @@ export default function ClientsPage() {
 
   // Filters
   const [search, setSearch] = useState('')
-  const [statusFilter, setStatusFilter] = useState('all')
+  const [statusFilter, setStatusFilter] = useState('client')
   const [assignedFilter, setAssignedFilter] = useState('all')
   const [categoryFilter, setCategoryFilter] = useState('all')
   const [minSpend, setMinSpend] = useState('')
@@ -182,6 +182,34 @@ export default function ClientsPage() {
         setLoading(false)
       })
   }, [])
+
+  // True when anything differs from how the page opens
+  const filtersActive =
+    search !== '' ||
+    statusFilter !== 'client' ||
+    assignedFilter !== 'all' ||
+    categoryFilter !== 'all' ||
+    minSpend !== '' ||
+    period !== 'all' ||
+    customFrom !== '' ||
+    customTo !== '' ||
+    sortField !== 'last_name' ||
+    sortDirection !== 'asc'
+
+  // Back to how the page opens. Rows per page is kept (a display choice, not a filter).
+  function clearFilters() {
+    setSearch('')
+    setStatusFilter('client')
+    setAssignedFilter('all')
+    setCategoryFilter('all')
+    setMinSpend('')
+    setPeriod('all')
+    setCustomFrom('')
+    setCustomTo('')
+    setSortField('last_name')
+    setSortDirection('asc')
+    setCurrentPage(1)
+  }
 
   function handleSort(field: SortField) {
     if (field === sortField) {
@@ -287,12 +315,21 @@ export default function ClientsPage() {
           {/* Count + page size */}
           <div className="flex items-center justify-between flex-wrap gap-2">
             <p className="text-sm text-muted">
-              {filtered.length === allClients.length
-                ? `${allClients.length} clients`
-                : `Showing ${filtered.length} of ${allClients.length} clients`}
+              {(() => {
+                const noun = statusFilter === 'client' ? 'clients' : 'people'
+                const base = statusFilter === 'all' ? allClients.length : allClients.filter(c => c.status === statusFilter).length
+                return filtered.length === base
+                  ? `${base} ${noun}`
+                  : `Showing ${filtered.length} of ${base} ${noun}`
+              })()}
               {selectionActive && <span className="md:hidden"> ({columnLabel})</span>}
             </p>
             <div className="flex items-center gap-2">
+              {filtersActive && (
+                <button type="button" onClick={clearFilters} className="btn-secondary text-sm min-h-[44px] md:min-h-0">
+                  Clear filters
+                </button>
+              )}
               <span className="text-sm text-muted">Rows per page:</span>
               <select
                 value={pageSize}
@@ -320,11 +357,10 @@ export default function ClientsPage() {
               onChange={e => { setStatusFilter(e.target.value); setCurrentPage(1) }}
               className={`${inputCls} min-h-[44px] md:min-h-9`}
             >
-              <option value="all">All Statuses</option>
               <option value="client">Client</option>
-              <option value="lead">Lead</option>
               <option value="inactive">Inactive</option>
               <option value="deceased">Deceased</option>
+              <option value="all">All (not leads)</option>
             </select>
             <select
               value={assignedFilter}
