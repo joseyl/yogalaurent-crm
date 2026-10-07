@@ -4,6 +4,7 @@ import DashboardCharts from '@/components/charts/DashboardCharts'
 import ExpiringPassesPanel from '@/components/ExpiringPassesPanel'
 import PassListsPanel from '@/components/PassListsPanel'
 import AwaitingPaymentPanel from '@/components/AwaitingPaymentPanel'
+import MomenceRefreshButton from '@/components/MomenceRefreshButton'
 import { formatGBP } from '@/lib/utils'
 import { fetchAll } from '@/lib/fetchAll'
 import PageHeader from '@/components/ui/PageHeader'
@@ -425,12 +426,12 @@ export default async function DashboardPage() {
       {/* System status, kept below the information cards */}
       <div className="mt-6">
         {/* Momence sync status */}
-        <div className="card flex items-center gap-3 p-4 mb-3">
+        <div className="card flex flex-wrap items-center gap-3 p-4 mb-3">
           <span
             className="w-2.5 h-2.5 flex-shrink-0 rounded-full"
             style={{ background: dotColor }}
           />
-          <p className="text-sm text-body">
+          <p className="text-sm text-body flex-1 min-w-[200px]">
             {latestSyncUnavailable
               ? 'Momence status unavailable'
               : latestSync
@@ -438,11 +439,12 @@ export default async function DashboardPage() {
                   Momence copy: last run{' '}
                   {formatUKDateTime(latestSync.finished_at ?? latestSync.started_at)},{' '}
                   {latestSync.status === 'success' ? 'Success' : latestSync.status === 'failed' ? 'Failed' : latestSync.status}
-                  {latestSync.status === 'failed' && latestSync.error && ` — ${latestSync.error}`}
+                  {latestSync.status === 'failed' && latestSync.error && `: ${latestSync.error}`}
                 </>
               : 'Momence copy: no sync yet'
             }
           </p>
+          <MomenceRefreshButton />
         </div>
 
         {/* Webhook problems, last 7 days */}
