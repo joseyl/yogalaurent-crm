@@ -2,825 +2,358 @@
 
 import { Fragment, useEffect, useState } from 'react'
 import Link from 'next/link'
-import StatusBadge from '@/components/StatusBadge'
+import {
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Legend,
+  Tooltip,
+} from 'recharts'
 import LoadingSpinner from '@/app/components/LoadingSpinner'
-import { formatGBP, categoryLabel } from '@/lib/utils'
+import { formatGBP } from '@/lib/utils'
 import PageHeader from '@/components/ui/PageHeader'
 import Collapsible from '@/components/ui/Collapsible'
+import PeriodFilter from '@/components/PeriodFilter'
+import { periodRange, formatDay, type Period } from '@/lib/periods'
 
-// ── Types ────────────────────────────────────────────────────────────────────
+// ── Types (match app/api/reports/route.ts) ─────────────────────────────────────
 
-interface Spender {
-  id: string
-  first_name: string | null
-  last_name: string | null
-  email: string
-  status: string
-  total_spend: number
-  purchase_count: number
-}
-
-interface CategorySpender {
-  id: string
-  first_name: string | null
-  last_name: string | null
-  email: string
-  total_spend: number
-  purchase_count: number
-}
-
-interface RetreatRow {
-  base_name: string
-  year: number | null
-  total_revenue: number
-  client_count: number
-}
+interface Totals { revenue: number; sales: number }
+interface ProductRow { id: string; name: string; cur: Totals; prev: Totals | null }
+interface FamilyRow { family: string; cur: Totals; prev: Totals | null; products: ProductRow[] }
+interface CategoryRow { category: string; label: string; cur: Totals; prev: Totals | null; families: FamilyRow[] }
+interface Headline { revenue: number; sales: number; clients: number; lr: number; ttl: number }
+interface ClassesBlock { buyers: number; newBuyers: number; returning: number; bookings: number | null }
 
 interface ReportsData {
-  topSpenders: Spender[]
-  byCategory: {
-    classes: CategorySpender[]
-    training: CategorySpender[]
-    retreat: CategorySpender[]
-    workshop: CategorySpender[]
-  }
-  retreats: RetreatRow[]
-  revenueByEntity: { total: number; lr: number; ttl: number }
+  range: { from: string | null; to: string | null }
+  prevRange: { from: string; to: string } | null
+  headline: { cur: Headline; prev: Headline | null }
+  categories: CategoryRow[]
+  trend: { byYear: boolean; rows: Record<string, number | string>[] }
+  classes: { cur: ClassesBlock; prev: ClassesBlock | null }
 }
 
-interface TrainingCohortRow {
-  product_name: string
-  edition: string | null
-  cohort_year: number | null
-  student_count: number
-  total_revenue: number
+// Fixed colour per category (validated categorical palette, light mode). Colour follows
+// the category, never its rank.
+const CATEGORY_COLOURS: Record<string, string> = {
+  training: '#2a78d6',
+  classes: '#eb6834',
+  workshop: '#1baf7a',
+  retreat: '#eda100',
+  private: '#e87ba4',
+  other: '#008300',
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
-function fmt(n: number): string {
-  return formatGBP(n)
+// ── Helpers ────────────────────────────────────────────────────────────────────
+
+function change(cur: number, prev: number | null | undefined): string | null {
+  if (prev === null || prev === undefined) return null
+  if (prev === 0) return cur === 0 ? '0%' : 'new'
+  const pct = Math.round(((cur - prev) / Math.abs(prev)) * 100)
+  return `${pct > 0 ? '+' : ''}${pct}%`
 }
 
-function escapeCsv(v: string): string {
-  if (v.includes(',') || v.includes('\n') || v.includes('"')) {
-    return `"${v.replace(/"/g, '""')}"`
-  }
-  return v
+function bucketLabel(b: string, byYear: boolean): string {
+  if (byYear) return b
+  const [y, m] = b.split('-').map(Number)
+  return `${MONTHS[m - 1]} ${String(y).slice(2)}`
 }
 
-function downloadCsv(rows: string[][], filename: string) {
-  const csv = rows.map(r => r.map(escapeCsv).join(',')).join('\n')
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = filename
-  a.click()
-  URL.revokeObjectURL(url)
+function share(part: number, total: number): string {
+  if (!total) return ''
+  return `${Math.round((part / total) * 100)}%`
 }
 
-function today(): string {
-  return new Date().toISOString().split('T')[0]
-}
+// ── Headline ───────────────────────────────────────────────────────────────────
 
-// ── Shared table styles ───────────────────────────────────────────────────────
-
-const thStyle: React.CSSProperties = {
-  fontSize: '11px',
-  color: 'var(--color-muted)',
-  textTransform: 'uppercase',
-  letterSpacing: '0.05em',
-  textAlign: 'left',
-  fontWeight: 500,
-}
-
-const tdStyle: React.CSSProperties = {
-  fontSize: '14px',
-  borderBottom: '1px solid var(--color-card-border)',
-  verticalAlign: 'middle',
-}
-
-function Empty() {
+function HeadlineCards({ cur, prev }: { cur: Headline; prev: Headline | null }) {
+  const cards = [
+    { label: 'Revenue', value: formatGBP(cur.revenue), delta: change(cur.revenue, prev?.revenue), was: prev ? formatGBP(prev.revenue) : null },
+    { label: 'Sales', value: String(cur.sales), delta: change(cur.sales, prev?.sales), was: prev ? String(prev.sales) : null },
+    { label: 'Paying clients', value: String(cur.clients), delta: change(cur.clients, prev?.clients), was: prev ? String(prev.clients) : null },
+  ]
   return (
-    <p className="text-muted italic text-sm text-center py-4">
-      No data for the selected period.
-    </p>
-  )
-}
-
-// ── Revenue Summary Block ─────────────────────────────────────────────────────
-
-function RevenueSummaryBlock({ data }: { data: { total: number; lr: number; ttl: number } }) {
-  return (
-    <div className="card p-5 mb-4">
-      <p className="uppercase tracking-wide text-xs mb-3 text-muted">Revenue for Selected Period</p>
-      <div className="flex flex-col gap-2">
-        <div className="flex justify-between items-baseline">
-          <span className="font-bold text-heading" style={{ fontSize: '22px' }}>{formatGBP(data.total)}</span>
-          <span className="text-xs font-semibold uppercase tracking-wide text-muted">Total</span>
+    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      {cards.map(c => (
+        <div key={c.label} className="card p-5">
+          <p className="text-xs font-medium text-muted uppercase tracking-wide">{c.label}</p>
+          <p className="text-2xl font-bold text-heading mt-1">{c.value}</p>
+          {c.delta && <p className="text-xs text-muted mt-1">{c.delta} vs last year ({c.was})</p>}
         </div>
-        <div className="border-t border-card-border pt-2 flex flex-col gap-1.5">
-          <div className="flex justify-between items-center">
-            <span className="text-sm text-body">Laurent Roure</span>
-            <span className="text-sm font-medium text-body">{formatGBP(data.lr)}</span>
-          </div>
-          <div className="flex justify-between items-center">
-            <span className="text-sm text-body">Terra Training Ltd</span>
-            <span className="text-sm font-medium text-body">{formatGBP(data.ttl)}</span>
-          </div>
+      ))}
+      <div className="card p-5">
+        <p className="text-xs font-medium text-muted uppercase tracking-wide">By business</p>
+        <div className="mt-2 flex flex-col gap-1.5 text-sm">
+          <div className="flex justify-between gap-2"><span className="text-body">Laurent Roure</span><span className="font-medium text-heading">{formatGBP(cur.lr)}</span></div>
+          <div className="flex justify-between gap-2"><span className="text-body">Terra Training Ltd</span><span className="font-medium text-heading">{formatGBP(cur.ttl)}</span></div>
+          {prev && (
+            <p className="text-xs text-muted mt-1">
+              vs last year: {change(cur.lr, prev.lr)} and {change(cur.ttl, prev.ttl)}
+            </p>
+          )}
         </div>
       </div>
     </div>
   )
 }
 
-// ── Section 1: Top Spenders ───────────────────────────────────────────────────
+// ── Revenue table ──────────────────────────────────────────────────────────────
 
-function TopSpendersSection({ data }: { data: Spender[] }) {
-  function exportCsv() {
-    const headers = ['Rank', 'First Name', 'Last Name', 'Email', 'Status', 'Purchases', 'Total Spend']
-    const rows = data.map((s, i) => [
-      String(i + 1),
-      s.first_name ?? '',
-      s.last_name ?? '',
-      s.email,
-      s.status,
-      String(s.purchase_count),
-      formatGBP(s.total_spend),
-    ])
-    downloadCsv([headers, ...rows], `top-spenders-${today()}.csv`)
-  }
+const th: React.CSSProperties = { padding: '10px 12px', textAlign: 'left', fontSize: 12, fontWeight: 600, color: 'var(--color-muted)', borderBottom: '1px solid var(--color-card-border)', whiteSpace: 'nowrap' }
+const tdBase: React.CSSProperties = { padding: '10px 12px', fontSize: 14, borderBottom: '1px solid var(--color-card-border)', verticalAlign: 'middle' }
+const num: React.CSSProperties = { ...tdBase, textAlign: 'right', whiteSpace: 'nowrap' }
 
-  return (
-    <Collapsible title="Top 20 Spenders" defaultOpen>
-      <div className="flex justify-end mb-4">
-        <button onClick={exportCsv} className="btn-secondary">Export CSV</button>
-      </div>
-      {data.length === 0 ? <Empty /> : (
-        <>
-          {/* Desktop table */}
-          <div className="hidden md:block">
-            <table className="w-full border-collapse">
-              <thead>
-                <tr className="bg-grey-subtle border-b border-card-border">
-                  <th style={{ ...thStyle, width: '48px' }}>Rank</th>
-                  <th style={thStyle}>Name</th>
-                  <th style={thStyle}>Email</th>
-                  <th style={thStyle}>Status</th>
-                  <th style={{ ...thStyle, textAlign: 'center' }}>Purchases</th>
-                  <th style={{ ...thStyle, textAlign: 'right' }}>Total Spend</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.map((s, i) => (
-                  <tr key={s.id} className="hover:bg-grey-subtle">
-                    <td style={{ ...tdStyle, color: 'var(--color-muted)' }}>{i + 1}</td>
-                    <td style={{ ...tdStyle, fontWeight: 500, color: 'var(--color-heading)' }}>
-                      <Link href={`/clients/${s.id}`} className="hover:underline">
-                        {s.first_name} {s.last_name}
-                      </Link>
-                    </td>
-                    <td style={{ ...tdStyle, color: 'var(--color-muted)' }}>{s.email}</td>
-                    <td style={tdStyle}><StatusBadge status={s.status} /></td>
-                    <td style={{ ...tdStyle, textAlign: 'center' }}>{s.purchase_count}</td>
-                    <td style={{ ...tdStyle, textAlign: 'right', fontWeight: 600 }}>{fmt(s.total_spend)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          {/* Mobile cards */}
-          <div className="md:hidden space-y-3">
-            {data.map((s, i) => (
-              <Link
-                key={s.id}
-                href={`/clients/${s.id}`}
-                className="card block p-4"
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <p className="font-semibold text-sm text-heading">
-                      <span className="text-muted font-normal mr-1">#{i + 1}</span>
-                      {s.first_name} {s.last_name}
-                    </p>
-                    <p className="text-muted text-xs mt-0.5">{s.email}</p>
-                  </div>
-                  <StatusBadge status={s.status} />
-                </div>
-                <div className="flex justify-between items-center mt-2">
-                  <span className="text-muted text-xs">{s.purchase_count} purchases</span>
-                  <span className="font-semibold text-sm" style={{ color: 'var(--accent)' }}>{fmt(s.total_spend)}</span>
-                </div>
-              </Link>
-            ))}
-          </div>
-        </>
-      )}
-    </Collapsible>
-  )
-}
-
-// ── Section 2: By Category ────────────────────────────────────────────────────
-
-function CategoryTable({ data }: { data: CategorySpender[] }) {
-  if (data.length === 0) return <Empty />
-  return (
-    <>
-      <div className="hidden md:block">
-        <table className="w-full border-collapse">
-          <thead>
-            <tr className="bg-grey-subtle border-b border-card-border">
-              <th style={{ ...thStyle, width: '48px' }}>Rank</th>
-              <th style={thStyle}>Name</th>
-              <th style={thStyle}>Email</th>
-              <th style={{ ...thStyle, textAlign: 'center' }}>Purchases</th>
-              <th style={{ ...thStyle, textAlign: 'right' }}>Total Spend</th>
-            </tr>
-          </thead>
-          <tbody>
-            {data.map((s, i) => (
-              <tr key={s.id} className="hover:bg-grey-subtle">
-                <td style={{ ...tdStyle, color: 'var(--color-muted)' }}>{i + 1}</td>
-                <td style={{ ...tdStyle, fontWeight: 500, color: 'var(--color-heading)' }}>
-                  <Link href={`/clients/${s.id}`} className="hover:underline">
-                    {s.first_name} {s.last_name}
-                  </Link>
-                </td>
-                <td style={{ ...tdStyle, color: 'var(--color-muted)' }}>{s.email}</td>
-                <td style={{ ...tdStyle, textAlign: 'center' }}>{s.purchase_count}</td>
-                <td style={{ ...tdStyle, textAlign: 'right', fontWeight: 600 }}>{fmt(s.total_spend)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      <div className="md:hidden space-y-3">
-        {data.map((s, i) => (
-          <Link
-            key={s.id}
-            href={`/clients/${s.id}`}
-            className="card block p-4"
-          >
-            <p className="font-semibold text-sm text-heading">
-              <span className="text-muted font-normal mr-1">#{i + 1}</span>
-              {s.first_name} {s.last_name}
-            </p>
-            <p className="text-muted text-xs mt-0.5">{s.email}</p>
-            <div className="flex justify-between items-center mt-2">
-              <span className="text-muted text-xs">{s.purchase_count} purchases</span>
-              <span className="font-semibold text-sm" style={{ color: 'var(--accent)' }}>{fmt(s.total_spend)}</span>
-            </div>
-          </Link>
-        ))}
-      </div>
-    </>
-  )
-}
-
-function ByCategorySection({
-  data,
-}: {
-  data: ReportsData['byCategory']
-}) {
-  const sections: { key: keyof ReportsData['byCategory']; label: string }[] = [
-    { key: 'classes', label: 'Classes' },
-    { key: 'training', label: 'Training' },
-    { key: 'retreat', label: 'Retreats' },
-    { key: 'workshop', label: 'In-person Workshops' },
-  ]
-
-  function exportCategory(key: keyof ReportsData['byCategory']) {
-    const headers = ['Rank', 'First Name', 'Last Name', 'Email', 'Purchases', 'Total Spend']
-    const rows = data[key].map((s, i) => [
-      String(i + 1),
-      s.first_name ?? '',
-      s.last_name ?? '',
-      s.email,
-      String(s.purchase_count),
-      formatGBP(s.total_spend),
-    ])
-    downloadCsv([headers, ...rows], `top-spenders-${key}-${today()}.csv`)
-  }
-
-  return (
-    <Collapsible title="Top Spenders by Category" defaultOpen>
-      {sections.map(({ key, label }) => (
-        <div key={key} className="mb-6 last:mb-0">
-          <div className="flex justify-between items-center mb-3">
-            <h3 className="text-sm font-semibold text-heading">{label}</h3>
-            <button onClick={() => exportCategory(key)} className="btn-secondary">Export CSV</button>
-          </div>
-          <CategoryTable data={data[key]} />
-        </div>
-      ))}
-    </Collapsible>
-  )
-}
-
-// ── Section 3: Revenue by Retreat ─────────────────────────────────────────────
-
-function RetreatsSection({ data }: { data: RetreatRow[] }) {
-  // Group by base_name
-  const groupMap = new Map<string, RetreatRow[]>()
-  for (const row of data) {
-    if (!groupMap.has(row.base_name)) groupMap.set(row.base_name, [])
-    groupMap.get(row.base_name)!.push(row)
-  }
-
-  // Sort editions within each group by year desc
-  for (const rows of groupMap.values()) {
-    rows.sort((a, b) => {
-      if (a.year === b.year) return 0
-      if (a.year === null) return 1
-      if (b.year === null) return -1
-      return b.year - a.year
-    })
-  }
-
-  // Sort groups by max year desc
-  const sortedGroups = Array.from(groupMap.entries()).sort(([, aRows], [, bRows]) => {
-    const aMax = aRows.reduce<number | null>((m, r) => r.year !== null && (m === null || r.year > m) ? r.year : m, null)
-    const bMax = bRows.reduce<number | null>((m, r) => r.year !== null && (m === null || r.year > m) ? r.year : m, null)
-    if (aMax === bMax) return 0
-    if (aMax === null) return 1
-    if (bMax === null) return -1
-    return bMax - aMax
+function RevenueTable({ categories, total, hasPrev }: { categories: CategoryRow[]; total: number; hasPrev: boolean }) {
+  const [open, setOpen] = useState<Set<string>>(new Set())
+  const toggle = (key: string) => setOpen(s => {
+    const n = new Set(s)
+    if (n.has(key)) n.delete(key); else n.add(key)
+    return n
   })
 
-  function exportCsv() {
-    const headers = ['Destination', 'Year', 'Clients', 'Total Revenue']
-    const rows: string[][] = []
-    for (const [baseName, editions] of sortedGroups) {
-      for (const r of editions) {
-        rows.push([baseName, r.year != null ? String(r.year) : '', String(r.client_count), formatGBP(r.total_revenue)])
-      }
-    }
-    downloadCsv([headers, ...rows], `revenue-retreats-${today()}.csv`)
+  function cells(t: Totals, prev: Totals | null) {
+    return (
+      <>
+        <td style={num}>{t.sales}</td>
+        <td style={num}>{formatGBP(t.revenue)}</td>
+        <td style={num} className="hidden md:table-cell">{share(t.revenue, total)}</td>
+        {hasPrev && <td style={num}>{change(t.revenue, prev?.revenue) ?? ''}</td>}
+      </>
+    )
+  }
+
+  if (categories.length === 0) {
+    return <p className="text-muted italic text-sm text-center py-4">No sales in this period.</p>
   }
 
   return (
-    <Collapsible title="Revenue by Retreat" defaultOpen>
-      <div className="flex justify-end mb-4">
-        <button onClick={exportCsv} className="btn-secondary">Export CSV</button>
-      </div>
-      {data.length === 0 ? <Empty /> : (
-        <>
-          {/* Desktop table */}
-          <div className="hidden md:block">
-            <table className="w-full border-collapse">
-              <thead>
-                <tr className="bg-grey-subtle border-b border-card-border">
-                  <th style={thStyle}>Retreat</th>
-                  <th style={{ ...thStyle, textAlign: 'center' }}>Clients</th>
-                  <th style={{ ...thStyle, textAlign: 'right' }}>Total Revenue</th>
+    <div className="overflow-x-auto">
+      <table className="w-full border-collapse">
+        <thead>
+          <tr>
+            <th style={th}>Category, family, product</th>
+            <th style={{ ...th, textAlign: 'right' }}>Sales</th>
+            <th style={{ ...th, textAlign: 'right' }}>Revenue</th>
+            <th style={{ ...th, textAlign: 'right' }} className="hidden md:table-cell">Share</th>
+            {hasPrev && <th style={{ ...th, textAlign: 'right' }}>vs last year</th>}
+          </tr>
+        </thead>
+        <tbody>
+          {categories.map(c => {
+            const cKey = c.category
+            const cOpen = open.has(cKey)
+            return (
+              <Fragment key={cKey}>
+                <tr className="cursor-pointer hover:bg-grey-subtle" onClick={() => toggle(cKey)}>
+                  <td style={{ ...tdBase, fontWeight: 600 }} className="text-heading">
+                    <span className="inline-block w-4 text-muted">{cOpen ? '-' : '+'}</span>
+                    <span className="inline-block w-2.5 h-2.5 mr-2 align-middle" style={{ background: CATEGORY_COLOURS[c.category] ?? '#667085', borderRadius: 2 }} />
+                    {c.label}
+                  </td>
+                  {cells(c.cur, c.prev)}
                 </tr>
-              </thead>
-              <tbody>
-                {sortedGroups.map(([baseName, editions]) => {
-                  if (editions.length === 1) {
-                    const r = editions[0]
-                    const label = r.year != null ? `${baseName} ${r.year}` : baseName
-                    return (
-                      <tr key={baseName} className="hover:bg-grey-subtle">
-                        <td style={{ ...tdStyle, fontWeight: 500, color: 'var(--color-heading)' }}>{label}</td>
-                        <td style={{ ...tdStyle, textAlign: 'center', color: 'var(--color-muted)' }}>{r.client_count}</td>
-                        <td style={{ ...tdStyle, textAlign: 'right', fontWeight: 600 }}>{fmt(r.total_revenue)}</td>
-                      </tr>
-                    )
-                  }
-                  const groupClients = editions.reduce((s, r) => s + r.client_count, 0)
-                  const groupRevenue = editions.reduce((s, r) => s + r.total_revenue, 0)
+                {cOpen && c.families.map(f => {
+                  const fKey = `${cKey}::${f.family}`
+                  const fOpen = open.has(fKey)
+                  const single = f.products.length === 1 && f.products[0].name === f.family
                   return (
-                    <Fragment key={baseName}>
-                      <tr className="bg-grey-subtle">
-                        <td colSpan={3} style={{ ...tdStyle, fontWeight: 700, color: 'var(--color-heading)', fontSize: '13px' }}>{baseName}</td>
+                    <Fragment key={fKey}>
+                      <tr className={single ? '' : 'cursor-pointer hover:bg-grey-subtle'} onClick={() => !single && toggle(fKey)}>
+                        <td style={{ ...tdBase, paddingLeft: 36 }} className="text-body">
+                          {single ? (
+                            <Link href={`/products/${f.products[0].id}`} className="hover:underline" onClick={e => e.stopPropagation()}>{f.family}</Link>
+                          ) : (
+                            <><span className="inline-block w-4 text-muted">{fOpen ? '-' : '+'}</span>{f.family}</>
+                          )}
+                        </td>
+                        {cells(f.cur, f.prev)}
                       </tr>
-                      {editions.map(r => (
-                        <tr key={`${baseName}-${r.year}`} className="hover:bg-grey-subtle">
-                          <td style={{ ...tdStyle, paddingLeft: '24px', color: '#374151' }}>{r.year ?? '—'}</td>
-                          <td style={{ ...tdStyle, textAlign: 'center', color: 'var(--color-muted)' }}>{r.client_count}</td>
-                          <td style={{ ...tdStyle, textAlign: 'right', fontWeight: 600 }}>{fmt(r.total_revenue)}</td>
+                      {!single && fOpen && f.products.map(p => (
+                        <tr key={p.id}>
+                          <td style={{ ...tdBase, paddingLeft: 60, fontSize: 13 }} className="text-muted">
+                            <Link href={`/products/${p.id}`} className="hover:underline">{p.name}</Link>
+                          </td>
+                          {cells(p.cur, p.prev)}
                         </tr>
                       ))}
-                      <tr>
-                        <td style={{ ...tdStyle, background: 'var(--color-grey-subtle)', fontWeight: 700, color: 'var(--color-heading)' }}>Total</td>
-                        <td style={{ ...tdStyle, background: 'var(--color-grey-subtle)', textAlign: 'center', fontWeight: 700, color: 'var(--color-heading)' }}>{groupClients}</td>
-                        <td style={{ ...tdStyle, background: 'var(--color-grey-subtle)', textAlign: 'right', fontWeight: 700, color: 'var(--color-heading)' }}>{fmt(groupRevenue)}</td>
-                      </tr>
                     </Fragment>
                   )
                 })}
-              </tbody>
-            </table>
-          </div>
-          {/* Mobile cards */}
-          <div className="md:hidden space-y-3">
-            {sortedGroups.map(([baseName, editions]) => {
-              if (editions.length === 1) {
-                const r = editions[0]
-                const label = r.year != null ? `${baseName} ${r.year}` : baseName
-                return (
-                  <div key={baseName} className="card p-4">
-                    <p className="font-semibold text-sm text-heading">{label}</p>
-                    <div className="flex justify-between items-center mt-2">
-                      <span className="text-muted text-xs">{r.client_count} clients</span>
-                      <span className="font-semibold text-sm" style={{ color: 'var(--accent)' }}>{fmt(r.total_revenue)}</span>
-                    </div>
-                  </div>
-                )
-              }
-              const groupRevenue = editions.reduce((s, r) => s + r.total_revenue, 0)
-              return (
-                <div key={baseName} className="card overflow-hidden">
-                  <div className="px-4 py-2 bg-grey-subtle border-b border-card-border">
-                    <p className="font-bold text-sm text-heading">{baseName}</p>
-                    <p className="text-xs text-muted mt-0.5">{fmt(groupRevenue)} total</p>
-                  </div>
-                  {editions.map(r => (
-                    <div key={`${baseName}-${r.year}`} className="flex justify-between items-center px-4 py-2 border-b border-card-border last:border-0">
-                      <span className="text-sm text-body">{r.year ?? '—'}</span>
-                      <div className="flex gap-3 items-center">
-                        <span className="text-xs text-muted">{r.client_count} clients</span>
-                        <span className="text-sm font-semibold" style={{ color: 'var(--accent)' }}>{fmt(r.total_revenue)}</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )
-            })}
-          </div>
-        </>
-      )}
-    </Collapsible>
-  )
-}
-
-// ── Section 4: Revenue by Training Programme (cohort breakdown) ───────────────
-
-const TRAINING_PRODUCTS_ORDER = [
-  'Breathwork Professional Training - 60hr (Live)',
-  'Breathwork Professional Training - 60hr',
-  'Breathwork Professional Training - 40hr',
-  'Breathwork Professional Training - 100hr Bundle',
-  'Yoga Nidra Teacher Training',
-]
-
-function TrainingCohortsSection({ data }: { data: TrainingCohortRow[] }) {
-  function exportCsv(productName: string, rows: TrainingCohortRow[]) {
-    const headers = ['Cohort', 'Students', 'Revenue']
-    const csvRows = rows.map(r => [
-      r.edition && r.cohort_year != null ? `${r.edition} ${r.cohort_year}` : 'Unassigned',
-      String(r.student_count),
-      formatGBP(r.total_revenue),
-    ])
-    downloadCsv([headers, ...csvRows], `training-${productName.replace(/\s+/g, '-').toLowerCase()}-${today()}.csv`)
-  }
-
-  return (
-    <Collapsible title="Revenue by Training Programme" defaultOpen>
-      {TRAINING_PRODUCTS_ORDER.map(productName => {
-        const rows = data.filter(r => r.product_name === productName)
-
-        // Group rows by cohort_year, preserving insertion order (API already sorted)
-        const yearMap = new Map<number | null, TrainingCohortRow[]>()
-        for (const row of rows) {
-          const yr = row.cohort_year
-          if (!yearMap.has(yr)) yearMap.set(yr, [])
-          yearMap.get(yr)!.push(row)
-        }
-
-        const grandStudents = rows.reduce((s, r) => s + r.student_count, 0)
-        const grandRevenue = rows.reduce((s, r) => s + r.total_revenue, 0)
-
-        return (
-          <div key={productName} className="mb-6 last:mb-0">
-            <div className="flex justify-between items-center mb-3">
-              <h3 className="text-sm font-semibold text-heading">{productName}</h3>
-              <button onClick={() => exportCsv(productName, rows)} className="btn-secondary">Export CSV</button>
-            </div>
-            {rows.length === 0 ? <Empty /> : (
-              <table className="w-full border-collapse">
-                <thead>
-                  <tr className="bg-grey-subtle border-b border-card-border">
-                    <th style={thStyle}>Cohort</th>
-                    <th style={{ ...thStyle, textAlign: 'center' }}>Students</th>
-                    <th style={{ ...thStyle, textAlign: 'right' }}>Revenue</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {Array.from(yearMap.entries()).map(([yr, cohortRows]) => {
-                    const yearStudents = cohortRows.reduce((s, r) => s + r.student_count, 0)
-                    const yearRevenue = cohortRows.reduce((s, r) => s + r.total_revenue, 0)
-                    const yearLabel = yr != null ? `${yr} Total` : 'Unassigned Total'
-                    return (
-                      <Fragment key={yr ?? 'unassigned'}>
-                        {cohortRows.map(r => {
-                          const cohortLabel =
-                            r.edition && r.cohort_year != null
-                              ? `${r.edition} ${r.cohort_year}`
-                              : 'Unassigned'
-                          return (
-                            <tr key={`${r.edition ?? ''}-${r.cohort_year ?? ''}`} className="hover:bg-grey-subtle">
-                              <td style={tdStyle}>{cohortLabel}</td>
-                              <td style={{ ...tdStyle, textAlign: 'center', color: 'var(--color-muted)' }}>{r.student_count}</td>
-                              <td style={{ ...tdStyle, textAlign: 'right', fontWeight: 600 }}>{fmt(r.total_revenue)}</td>
-                            </tr>
-                          )
-                        })}
-                        <tr>
-                          <td style={{ ...tdStyle, background: 'var(--color-grey-subtle)', fontWeight: 700, color: 'var(--color-heading)' }}>{yearLabel}</td>
-                          <td style={{ ...tdStyle, background: 'var(--color-grey-subtle)', textAlign: 'center', fontWeight: 700, color: 'var(--color-heading)' }}>{yearStudents}</td>
-                          <td style={{ ...tdStyle, background: 'var(--color-grey-subtle)', textAlign: 'right', fontWeight: 700, color: 'var(--color-heading)' }}>{fmt(yearRevenue)}</td>
-                        </tr>
-                      </Fragment>
-                    )
-                  })}
-                  <tr>
-                    <td style={{ fontSize: '14px', fontWeight: 600, background: 'var(--color-grey-subtle)', color: 'var(--color-heading)', borderTop: '2px solid var(--color-card-border)' }}>Grand Total</td>
-                    <td style={{ fontSize: '14px', fontWeight: 600, background: 'var(--color-grey-subtle)', color: 'var(--color-heading)', textAlign: 'center', borderTop: '2px solid var(--color-card-border)' }}>{grandStudents}</td>
-                    <td style={{ fontSize: '14px', fontWeight: 600, background: 'var(--color-grey-subtle)', color: 'var(--color-heading)', textAlign: 'right', borderTop: '2px solid var(--color-card-border)' }}>{fmt(grandRevenue)}</td>
-                  </tr>
-                </tbody>
-              </table>
-            )}
-          </div>
-        )
-      })}
-    </Collapsible>
-  )
-}
-
-// ── Section 5: Interests Summary ─────────────────────────────────────────────
-
-interface InterestSummaryRow {
-  product_id: string
-  product_name: string
-  category: string
-  count: number
-}
-
-const INTEREST_CATEGORY_ORDER = ['training', 'retreat', 'workshop', 'classes', 'private', 'other']
-
-function InterestsSummarySection({ data }: { data: InterestSummaryRow[] }) {
-  const [showZero, setShowZero] = useState(false)
-
-  function exportCsv() {
-    const headers = ['Category', 'Product', 'Potential Buyers']
-    const rows = data.map(r => [categoryLabel(r.category), r.product_name, String(r.count)])
-    downloadCsv([headers, ...rows], `interests-summary-${today()}.csv`)
-  }
-
-  const grouped: Record<string, InterestSummaryRow[]> = {}
-  for (const row of data) {
-    if (!grouped[row.category]) grouped[row.category] = []
-    grouped[row.category].push(row)
-  }
-
-  const orderedCategories = INTEREST_CATEGORY_ORDER.filter(c => grouped[c])
-
-  return (
-    <Collapsible title="Interests Summary" defaultOpen>
-      <div className="flex justify-end mb-4">
-        <button onClick={exportCsv} className="btn-secondary">Export CSV</button>
-      </div>
-      <div className="flex items-center gap-2 mb-4">
-        <input
-          type="checkbox"
-          id="show-zero-interests"
-          checked={showZero}
-          onChange={e => setShowZero(e.target.checked)}
-          style={{ width: '16px', height: '16px', cursor: 'pointer', borderRadius: 0 }}
-        />
-        <label htmlFor="show-zero-interests" className="text-sm text-body" style={{ cursor: 'pointer' }}>
-          Show products with zero interests
-        </label>
-      </div>
-
-      {data.length === 0 ? <Empty /> : (
-        <div className="hidden md:block">
-          <table className="w-full border-collapse">
-            <thead>
-              <tr className="bg-grey-subtle border-b border-card-border">
-                <th style={thStyle}>Product</th>
-                <th style={{ ...thStyle, textAlign: 'right' }}>Potential Buyers</th>
-              </tr>
-            </thead>
-            <tbody>
-              {orderedCategories.map(cat => {
-                const rows = grouped[cat].filter(r => showZero || r.count > 0)
-                if (rows.length === 0) return null
-                return (
-                  <>
-                    <tr key={`cat-${cat}`}>
-                      <td
-                        colSpan={2}
-                        style={{
-                          ...tdStyle,
-                          background: 'var(--color-grey-subtle)',
-                          fontWeight: 600,
-                          fontSize: '12px',
-                          color: '#374151',
-                          textTransform: 'uppercase',
-                          letterSpacing: '0.05em',
-                          paddingLeft: '8px',
-                        }}
-                      >
-                        {categoryLabel(cat)}
-                      </td>
-                    </tr>
-                    {rows.map(r => (
-                      <tr key={r.product_id} className="hover:bg-grey-subtle">
-                        <td style={{ ...tdStyle, color: 'var(--color-heading)', paddingLeft: '8px' }}>{r.product_name}</td>
-                        <td style={{ ...tdStyle, textAlign: 'right', fontWeight: r.count > 0 ? 600 : undefined, color: r.count === 0 ? '#9ca3af' : undefined }}>
-                          {r.count}
-                        </td>
-                      </tr>
-                    ))}
-                  </>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {/* Mobile */}
-      {data.length > 0 && (
-        <div className="md:hidden space-y-4">
-          {orderedCategories.map(cat => {
-            const rows = grouped[cat].filter(r => showZero || r.count > 0)
-            if (rows.length === 0) return null
-            return (
-              <div key={cat}>
-                <p
-                  className="text-xs uppercase tracking-wide font-semibold mb-2 bg-grey-subtle"
-                  style={{ color: '#374151', padding: '4px 8px' }}
-                >
-                  {categoryLabel(cat)}
-                </p>
-                <div className="space-y-1">
-                  {rows.map(r => (
-                    <div key={r.product_id} className="card flex justify-between items-center px-3 py-2">
-                      <span className="text-sm text-heading">{r.product_name}</span>
-                      <span className="text-sm font-semibold" style={{ color: r.count === 0 ? '#9ca3af' : 'var(--color-heading)' }}>{r.count}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
+              </Fragment>
             )
           })}
-        </div>
-      )}
-    </Collapsible>
+        </tbody>
+      </table>
+      <p className="text-xs text-muted mt-2 px-3">Click a line to open it. Sales count paid sales only (bundle parts and free places at 0 are not counted).</p>
+    </div>
   )
 }
 
-// ── Main Page ─────────────────────────────────────────────────────────────────
+// ── Trend chart ────────────────────────────────────────────────────────────────
+
+function TrendChart({ trend, categories }: { trend: ReportsData['trend']; categories: CategoryRow[] }) {
+  const keys = categories.map(c => c.category)
+  const data = trend.rows.map(r => ({ ...r, label: bucketLabel(String(r.bucket), trend.byYear) }))
+  if (data.length === 0 || keys.length === 0) return <p className="text-muted italic text-sm text-center py-4">No sales in this period.</p>
+  return (
+    <ResponsiveContainer width="100%" height={300}>
+      <BarChart data={data} margin={{ top: 8, right: 8, left: 8, bottom: 4 }}>
+        <CartesianGrid strokeDasharray="3 3" stroke="#F2F4F7" vertical={false} />
+        <XAxis dataKey="label" tick={{ fontSize: 11, fill: '#667085' }} axisLine={false} tickLine={false} />
+        <YAxis tickFormatter={(v: number) => `£${Math.round(v / 1000)}k`} tick={{ fontSize: 11, fill: '#667085' }} axisLine={false} tickLine={false} width={48} />
+        <Tooltip
+          formatter={(v, name) => [formatGBP(Number(v ?? 0)), categories.find(c => c.category === String(name))?.label ?? String(name)]}
+          contentStyle={{ borderRadius: 8, border: '1px solid #E4E7EC', fontSize: 12, padding: '8px 12px' }}
+          cursor={{ fill: '#F2F4F7' }}
+        />
+        <Legend formatter={(name: string) => <span style={{ color: '#475467', fontSize: 12 }}>{categories.find(c => c.category === name)?.label ?? name}</span>} />
+        {keys.map(k => (
+          <Bar key={k} dataKey={k} stackId="rev" fill={CATEGORY_COLOURS[k] ?? '#667085'} stroke="#ffffff" strokeWidth={1} />
+        ))}
+      </BarChart>
+    </ResponsiveContainer>
+  )
+}
+
+// ── Classes in detail ──────────────────────────────────────────────────────────
+
+function ClassesDetail({ data, classesRow }: { data: ReportsData['classes']; classesRow: CategoryRow | undefined }) {
+  const { cur, prev } = data
+  const stats = [
+    { label: 'Class bookings', value: cur.bookings === null ? 'unavailable' : String(cur.bookings), delta: cur.bookings !== null ? change(cur.bookings, prev?.bookings ?? null) : null },
+    { label: 'Buyers', value: String(cur.buyers), delta: change(cur.buyers, prev?.buyers) },
+    { label: 'New buyers', value: String(cur.newBuyers), delta: change(cur.newBuyers, prev?.newBuyers) },
+    { label: 'Returning buyers', value: String(cur.returning), delta: change(cur.returning, prev?.returning) },
+  ]
+  return (
+    <div className="p-4 md:p-5 pt-0 md:pt-0">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {stats.map(s => (
+          <div key={s.label} className="border border-card-border rounded-lg p-3">
+            <p className="text-xs text-muted">{s.label}</p>
+            <p className="text-xl font-bold text-heading">{s.value}</p>
+            {s.delta && <p className="text-xs text-muted">{s.delta} vs last year</p>}
+          </div>
+        ))}
+      </div>
+      {classesRow && (
+        <div className="mt-4">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted mb-2">What was sold</p>
+          <ul className="text-sm divide-y divide-card-border">
+            {classesRow.families.flatMap(f => f.products.map(p => ({ f: f.family, p }))).filter(x => x.p.cur.sales > 0 || x.p.cur.revenue !== 0).map(({ f, p }) => (
+              <li key={p.id} className="flex justify-between gap-3 py-2">
+                <span className="text-body">{p.name} <span className="text-muted text-xs">({f})</span></span>
+                <span className="text-heading whitespace-nowrap">{p.cur.sales} sold, {formatGBP(p.cur.revenue)}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      <p className="text-xs text-muted mt-3">
+        New buyer: first ever paid classes purchase falls in this period. Bookings count every booking not cancelled, including training sessions until class types are labelled.
+      </p>
+    </div>
+  )
+}
+
+// ── Page ───────────────────────────────────────────────────────────────────────
 
 export default function ReportsPage() {
-  const [data, setData] = useState<ReportsData | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [dateFrom, setDateFrom] = useState('')
-  const [dateTo, setDateTo] = useState('')
+  const [period, setPeriod] = useState<Period>('this_year')
+  const [customFrom, setCustomFrom] = useState('')
+  const [customTo, setCustomTo] = useState('')
+  // Each result is stored with the dates it was loaded for, so "updating" is simply
+  // "the figures on screen are not for the dates now chosen"
+  const [loaded, setLoaded] = useState<{ key: string; data: ReportsData | null; error: string | null } | null>(null)
 
-  const [interestsSummary, setInterestsSummary] = useState<InterestSummaryRow[]>([])
-  const [interestsSummaryLoading, setInterestsSummaryLoading] = useState(true)
-
-  const [trainingCohorts, setTrainingCohorts] = useState<TrainingCohortRow[]>([])
-  const [trainingCohortsLoading, setTrainingCohortsLoading] = useState(true)
+  const range = periodRange(period, customFrom, customTo)
+  const key = `${range.from ?? ''}|${range.to ?? ''}`
+  const updating = loaded?.key !== key
+  const data = loaded?.data ?? null
+  const error = loaded?.key === key ? loaded.error : null
 
   useEffect(() => {
     let cancelled = false
     const sp = new URLSearchParams()
-    if (dateFrom) sp.set('date_from', dateFrom)
-    if (dateTo) sp.set('date_to', dateTo)
-    const url = `/api/reports${sp.toString() ? '?' + sp.toString() : ''}`
-    fetch(url)
-      .then(r => {
-        if (!r.ok) throw new Error('Failed to load reports. Please refresh.')
-        return r.json()
+    if (range.from) sp.set('date_from', range.from)
+    if (range.to) sp.set('date_to', range.to)
+    fetch(`/api/reports${sp.toString() ? '?' + sp.toString() : ''}`)
+      .then(async r => {
+        const body = await r.json().catch(() => ({}))
+        if (!r.ok) throw new Error(body.error ?? 'Failed to load reports. Please refresh.')
+        return body as ReportsData
       })
-      .then((d: ReportsData) => {
-        if (!cancelled) { setData(d); setLoading(false) }
-      })
-      .catch((err: Error) => {
-        if (!cancelled) { setError(err.message); setLoading(false) }
-      })
+      .then(d => { if (!cancelled) setLoaded({ key, data: d, error: null }) })
+      .catch((err: Error) => { if (!cancelled) setLoaded(prev => ({ key, data: prev?.data ?? null, error: err.message })) })
     return () => { cancelled = true }
-  }, [dateFrom, dateTo])
+  }, [key, range.from, range.to])
 
-  useEffect(() => {
-    let cancelled = false
-    fetch('/api/interests/summary')
-      .then(r => r.json())
-      .then((d: InterestSummaryRow[]) => {
-        if (!cancelled) { setInterestsSummary(d); setInterestsSummaryLoading(false) }
-      })
-      .catch(() => {
-        if (!cancelled) setInterestsSummaryLoading(false)
-      })
-    return () => { cancelled = true }
-  }, [])
+  if (!data && updating) return <LoadingSpinner message="Loading reports..." />
 
-  useEffect(() => {
-    let cancelled = false
-    fetch('/api/training-cohorts')
-      .then(r => r.json())
-      .then((d: TrainingCohortRow[]) => {
-        if (!cancelled) { setTrainingCohorts(d); setTrainingCohortsLoading(false) }
-      })
-      .catch(() => {
-        if (!cancelled) setTrainingCohortsLoading(false)
-      })
-    return () => { cancelled = true }
-  }, [])
-
-  function handleDateFrom(value: string) {
-    setLoading(true)
-    setError(null)
-    setDateFrom(value)
-  }
-
-  function handleDateTo(value: string) {
-    setLoading(true)
-    setError(null)
-    setDateTo(value)
-  }
-
-  function handleClear() {
-    setLoading(true)
-    setError(null)
-    setDateFrom('')
-    setDateTo('')
-  }
-
-  const inputCls = 'border border-card-border rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:border-accent'
-
-  if (loading) {
-    return <LoadingSpinner message="Loading reports..." />
-  }
+  const hasPrev = !!data?.prevRange
+  const classesRow = data?.categories.find(c => c.category === 'classes')
 
   return (
     <div className="px-4 md:px-6 pb-24">
       <PageHeader title="Reports" />
 
-      {/* Date range filter */}
-      <div className="card mb-6">
-        <div className="p-4 flex flex-col md:flex-row gap-4 items-start md:items-end">
-          <div>
-            <p className="text-muted text-xs mb-1">From</p>
-            <input
-              type="date"
-              value={dateFrom}
-              onChange={e => handleDateFrom(e.target.value)}
-              className={inputCls}
-              style={{ height: '40px' }}
-            />
-          </div>
-          <div>
-            <p className="text-muted text-xs mb-1">To</p>
-            <input
-              type="date"
-              value={dateTo}
-              onChange={e => handleDateTo(e.target.value)}
-              className={inputCls}
-              style={{ height: '40px' }}
-            />
-          </div>
-          {(dateFrom || dateTo) && (
-            <button onClick={handleClear} className="btn-secondary">
-              Clear
-            </button>
-          )}
-        </div>
+      <div className="card mb-6 p-4">
+        <PeriodFilter
+          period={period}
+          customFrom={customFrom}
+          customTo={customTo}
+          onChange={next => { setPeriod(next.period); setCustomFrom(next.customFrom); setCustomTo(next.customTo) }}
+          showSummary
+        />
+        <p className="text-xs text-muted mt-1">
+          {data?.prevRange
+            ? `Compared with: ${formatDay(data.prevRange.from)} to ${formatDay(data.prevRange.to)}`
+            : 'No comparison for this period (it needs a start and an end date).'}
+          {updating && ' Updating...'}
+        </p>
       </div>
 
-      {error && (
-        <div className="flex items-center justify-center min-h-[40vh]">
-          <p className="text-red-500">{error}</p>
-        </div>
-      )}
+      {error && <p className="text-sm mb-4" style={{ color: 'var(--color-red-vivid)' }}>{error}</p>}
 
-      {!loading && !error && data && (
-        <div className="space-y-4">
-          <RevenueSummaryBlock data={data.revenueByEntity} />
-          <TopSpendersSection data={data.topSpenders} />
-          <ByCategorySection data={data.byCategory} />
-          <RetreatsSection data={data.retreats} />
-        </div>
-      )}
+      {data && (
+        <div className={`space-y-4 ${updating ? 'opacity-60' : ''}`}>
+          <HeadlineCards cur={data.headline.cur} prev={data.headline.prev} />
 
-      {!trainingCohortsLoading && (
-        <div className="mt-4">
-          <TrainingCohortsSection data={trainingCohorts} />
-        </div>
-      )}
+          <Collapsible title="Revenue by category" defaultOpen>
+            <div className="px-1 md:px-2 pb-4">
+              <RevenueTable categories={data.categories} total={data.headline.cur.revenue} hasPrev={hasPrev} />
+            </div>
+          </Collapsible>
 
-      {!interestsSummaryLoading && (
-        <div className="mt-4">
-          <InterestsSummarySection data={interestsSummary} />
+          <Collapsible title={data.trend.byYear ? 'Revenue by year' : 'Revenue by month'} defaultOpen>
+            <div className="px-2 pb-4">
+              <TrendChart trend={data.trend} categories={data.categories} />
+            </div>
+          </Collapsible>
+
+          <Collapsible title="Classes in detail" defaultOpen>
+            <ClassesDetail data={data.classes} classesRow={classesRow} />
+          </Collapsible>
+
+          <div className="card p-4 md:p-5 text-sm text-body">
+            <p className="font-semibold text-heading mb-2">What these figures include</p>
+            <ul className="list-disc pl-5 space-y-1">
+              <li>Purchases dated in the period, in pounds, before fees. Revenue counts each purchase once, by its date.</li>
+              <li>Teacher trainings count the order total, not the cash received so far.</li>
+              <li>Momence passes are recorded at list price; discounted passes show the full price. Unlimited Pass renewals are missing.</li>
+              <li>Retreats booked through WeTravel are only included if they were typed in.</li>
+              <li>Not checked against the bank or Stripe. For internal use.</li>
+            </ul>
+            <p className="mt-3 text-muted">
+              Who spent most? Open the <Link href="/clients" className="underline">Clients page</Link>, choose the same period and sort by spend.
+            </p>
+          </div>
         </div>
       )}
     </div>

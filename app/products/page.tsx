@@ -96,7 +96,7 @@ const iconBtnStyle: React.CSSProperties = {
   borderRadius: 2,
 }
 
-const emptyAddForm = { name: '', category: 'classes', entity: 'Laurent Roure', destination: '', year: '' }
+const emptyAddForm = { name: '', family: '', category: 'classes', entity: 'Laurent Roure', destination: '', year: '' }
 
 export default function ProductsPage() {
   const [products, setProducts] = useState<Product[]>([])
@@ -109,7 +109,8 @@ export default function ProductsPage() {
   const [addError, setAddError] = useState<string | null>(null)
 
   const [editingId, setEditingId] = useState<string | null>(null)
-  const [editForm, setEditForm] = useState({ name: '', category: '', entity: '' })
+  const [editForm, setEditForm] = useState({ name: '', family: '', category: '', entity: '' })
+  const [interested, setInterested] = useState<Record<string, number>>({})
   const [editSaving, setEditSaving] = useState(false)
   const [editError, setEditError] = useState<string | null>(null)
 
@@ -128,6 +129,27 @@ export default function ProductsPage() {
       })
     return () => { cancelled = true }
   }, [])
+
+  // "Interested: N" per product (moved here from the Reports page)
+  useEffect(() => {
+    let cancelled = false
+    fetch('/api/interests/summary')
+      .then(r => (r.ok ? r.json() : []))
+      .then((rows: { product_id: string; count: number }[]) => {
+        if (!cancelled) setInterested(Object.fromEntries(rows.map(r => [r.product_id, r.count])))
+      })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [])
+
+  // Families already used in each category, offered as suggestions
+  const familiesByCategory: Record<string, string[]> = {}
+  for (const p of products) {
+    const f = p.base_name ?? p.name
+    familiesByCategory[p.category] = familiesByCategory[p.category] ?? []
+    if (!familiesByCategory[p.category].includes(f)) familiesByCategory[p.category].push(f)
+  }
+  for (const k of Object.keys(familiesByCategory)) familiesByCategory[k].sort()
 
   const active = products.filter(p => !p.archived)
   const archived = products.filter(p => p.archived)
@@ -151,7 +173,7 @@ export default function ProductsPage() {
     } else {
       if (!addForm.name.trim()) { setAddError('Name is required.'); return }
       name = addForm.name.trim()
-      base_name = addForm.name.trim()
+      base_name = addForm.family.trim() || addForm.name.trim()
     }
 
     setAddSaving(true)
@@ -190,7 +212,7 @@ export default function ProductsPage() {
 
   function startEdit(p: Product) {
     setEditingId(p.id)
-    setEditForm({ name: p.name, category: p.category, entity: p.entity })
+    setEditForm({ name: p.name, family: p.base_name ?? p.name, category: p.category, entity: p.entity })
     setEditError(null)
   }
 
@@ -202,7 +224,7 @@ export default function ProductsPage() {
       const res = await fetch(`/api/products/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: editForm.name.trim(), category: editForm.category, entity: editForm.entity }),
+        body: JSON.stringify({ name: editForm.name.trim(), base_name: editForm.family.trim() || editForm.name.trim(), category: editForm.category, entity: editForm.entity }),
       })
       if (!res.ok) {
         const data = await res.json() as { error?: string }
@@ -211,7 +233,7 @@ export default function ProductsPage() {
         return
       }
       setProducts(prev =>
-        prev.map(p => p.id === id ? { ...p, name: editForm.name.trim(), category: editForm.category, entity: editForm.entity } : p)
+        prev.map(p => p.id === id ? { ...p, name: editForm.name.trim(), base_name: editForm.family.trim() || editForm.name.trim(), category: editForm.category, entity: editForm.entity } : p)
       )
       setEditingId(null)
     } catch {
@@ -245,6 +267,15 @@ export default function ProductsPage() {
             onChange={e => setEditForm(f => ({ ...f, name: e.target.value }))}
             style={inlineInputStyle}
             autoFocus
+          />
+          <input
+            type="text"
+            value={editForm.family}
+            onChange={e => setEditForm(f => ({ ...f, family: e.target.value }))}
+            placeholder="Family"
+            list={`families-${editForm.category}`}
+            style={{ ...inlineInputStyle, marginTop: '6px' }}
+            aria-label="Family"
           />
           {editError && <p className="text-red-500 text-xs mt-1">{editError}</p>}
         </td>
@@ -288,6 +319,9 @@ export default function ProductsPage() {
       <tr key={p.id} className="border-b border-card-border hover:bg-grey-subtle">
         <td className="text-sm font-medium text-heading">
           <Link href={`/products/${p.id}`} className="hover:underline">{linkLabel ?? p.name}</Link>
+          {(interested[p.id] ?? 0) > 0 && (
+            <span className="ml-2 text-xs font-normal text-muted whitespace-nowrap">Interested: {interested[p.id]}</span>
+          )}
         </td>
         <td>
           <span style={{ background: 'var(--color-grey-subtle)', color: '#374151', padding: '2px 6px', fontSize: '11px', fontWeight: 500, borderRadius: '4px' }}>{entityAbbr(p.entity)}</span>
@@ -330,6 +364,13 @@ export default function ProductsPage() {
         }
       />
 
+      {/* Family suggestions for the add and edit forms */}
+      {Object.entries(familiesByCategory).map(([cat, fams]) => (
+        <datalist key={cat} id={`families-${cat}`}>
+          {fams.map(f => <option key={f} value={f} />)}
+        </datalist>
+      ))}
+
       {/* Add form */}
       {showAddForm && (
         <div className="border border-card-border rounded-lg p-4 mb-4 bg-grey-subtle">
@@ -370,6 +411,15 @@ export default function ProductsPage() {
                   onChange={e => setAddForm(f => ({ ...f, name: e.target.value }))}
                   style={inputStyle}
                   autoFocus
+                />
+                <label className="block text-xs text-muted mb-1 mt-3">Family (groups it in Products and Reports)</label>
+                <input
+                  type="text"
+                  value={addForm.family}
+                  onChange={e => setAddForm(f => ({ ...f, family: e.target.value }))}
+                  list={`families-${addForm.category}`}
+                  placeholder="e.g. Class Passes"
+                  style={inputStyle}
                 />
               </div>
             )}
@@ -447,59 +497,47 @@ export default function ProductsPage() {
             const catProducts = searchedActive.filter(p => p.category === cat)
             if (catProducts.length === 0) return null
 
-            if (cat === 'retreat') {
-              // Group by base_name, sort each group by year descending
-              const groupMap = new Map<string, Product[]>()
-              for (const p of catProducts) {
-                const key = p.base_name ?? p.name
-                if (!groupMap.has(key)) groupMap.set(key, [])
-                groupMap.get(key)!.push(p)
-              }
-              for (const items of groupMap.values()) {
-                items.sort((a, b) => (b.year ?? -Infinity) - (a.year ?? -Infinity))
-              }
-              return (
-                <div key={cat}>
-                  <h2 className="text-sm font-semibold uppercase tracking-wide mb-2 text-heading">
-                    {categoryLabel(cat)}
-                  </h2>
-                  <div className="card overflow-hidden">
-                    <table className="w-full border-collapse">
-                      <tbody>
-                        {Array.from(groupMap.entries()).map(([baseName, items]) => (
-                          <Fragment key={baseName}>
-                            <tr className="bg-grey-subtle border-b border-card-border">
-                              <td colSpan={4} className="text-xs font-semibold text-muted">
-                                {baseName}
-                              </td>
-                            </tr>
-                            {items.map(p => (
-                              editingId === p.id
-                                ? renderEditRow(p)
-                                : renderDisplayRow(p, p.year != null ? String(p.year) : p.name)
-                            ))}
-                          </Fragment>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              )
+            // Group by family (base_name). Retreat editions sort by year, newest first,
+            // and show the year; other products sort by name.
+            const groupMap = new Map<string, Product[]>()
+            for (const p of catProducts) {
+              const key = p.base_name ?? p.name
+              if (!groupMap.has(key)) groupMap.set(key, [])
+              groupMap.get(key)!.push(p)
             }
-
+            for (const items of groupMap.values()) {
+              items.sort((a, b) => cat === 'retreat'
+                ? (b.year ?? -Infinity) - (a.year ?? -Infinity) || a.name.localeCompare(b.name)
+                : a.name.localeCompare(b.name))
+            }
+            const groups = Array.from(groupMap.entries()).sort((a, b) => a[0].localeCompare(b[0]))
             return (
               <div key={cat}>
-                <h2
-                  className="text-sm font-semibold uppercase tracking-wide mb-2 text-heading"
-                >
+                <h2 className="text-sm font-semibold uppercase tracking-wide mb-2 text-heading">
                   {categoryLabel(cat)}
                 </h2>
                 <div className="card overflow-hidden">
                   <table className="w-full border-collapse">
                     <tbody>
-                      {catProducts.map(p => (
-                        editingId === p.id ? renderEditRow(p) : renderDisplayRow(p)
-                      ))}
+                      {groups.map(([family, items]) => {
+                        const single = items.length === 1 && items[0].name === family
+                        return (
+                          <Fragment key={family}>
+                            {!single && (
+                              <tr className="bg-grey-subtle border-b border-card-border">
+                                <td colSpan={4} className="text-xs font-semibold text-muted">
+                                  {family}
+                                </td>
+                              </tr>
+                            )}
+                            {items.map(p => (
+                              editingId === p.id
+                                ? renderEditRow(p)
+                                : renderDisplayRow(p, cat === 'retreat' && p.year != null && p.name === `${family} ${p.year}` ? String(p.year) : p.name)
+                            ))}
+                          </Fragment>
+                        )
+                      })}
                     </tbody>
                   </table>
                 </div>

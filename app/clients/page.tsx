@@ -1,5 +1,7 @@
 'use client'
 
+import PeriodFilter from '@/components/PeriodFilter'
+import { periodRange, type Period } from '@/lib/periods'
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
@@ -29,7 +31,6 @@ interface ClientRow extends Client {
   matches: number
 }
 
-type Period = 'all' | 'this_month' | 'last_month' | 'this_year' | 'last_year' | 'custom'
 
 const CATEGORY_LABELS: Record<string, string> = {
   classes: 'Classes',
@@ -38,50 +39,6 @@ const CATEGORY_LABELS: Record<string, string> = {
   workshop: 'In-person Workshop',
   private: 'Private',
   other: 'Other',
-}
-
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-
-function pad(n: number): string {
-  return String(n).padStart(2, '0')
-}
-
-// Today's London date as year, month (1-12)
-function londonYearMonth(): { y: number; m: number } {
-  const [y, m] = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/London' })
-    .format(new Date())
-    .split('-')
-    .map(Number)
-  return { y, m }
-}
-
-function lastDayOfMonth(y: number, m: number): number {
-  return new Date(Date.UTC(y, m, 0)).getUTCDate()
-}
-
-// Inclusive date range (YYYY-MM-DD) and a label for the chosen period
-function periodRange(period: Period, customFrom: string, customTo: string): { from: string | null; to: string | null; label: string } {
-  const { y, m } = londonYearMonth()
-  if (period === 'this_month') {
-    return { from: `${y}-${pad(m)}-01`, to: `${y}-${pad(m)}-${pad(lastDayOfMonth(y, m))}`, label: `${MONTHS[m - 1]} ${y}` }
-  }
-  if (period === 'last_month') {
-    const ly = m === 1 ? y - 1 : y
-    const lm = m === 1 ? 12 : m - 1
-    return { from: `${ly}-${pad(lm)}-01`, to: `${ly}-${pad(lm)}-${pad(lastDayOfMonth(ly, lm))}`, label: `${MONTHS[lm - 1]} ${ly}` }
-  }
-  if (period === 'this_year') return { from: `${y}-01-01`, to: `${y}-12-31`, label: `${y}` }
-  if (period === 'last_year') return { from: `${y - 1}-01-01`, to: `${y - 1}-12-31`, label: `${y - 1}` }
-  if (period === 'custom') {
-    const from = customFrom || null
-    const to = customTo || null
-    let label = 'All time'
-    if (from && to) label = `${formatDate(from)} to ${formatDate(to)}`
-    else if (from) label = `from ${formatDate(from)}`
-    else if (to) label = `up to ${formatDate(to)}`
-    return { from, to, label }
-  }
-  return { from: null, to: null, label: 'All time' }
 }
 
 type SortField = 'last_name' | 'spend' | 'last_purchase_date'
@@ -226,7 +183,7 @@ export default function ClientsPage() {
   const selectionActive = categoryFilter !== 'all' || range.from !== null || range.to !== null
   const spendLabel = [
     'Spend',
-    [categoryFilter !== 'all' ? CATEGORY_LABELS[categoryFilter] ?? categoryFilter : null, range.label !== 'All time' ? range.label : null]
+    [categoryFilter !== 'all' ? CATEGORY_LABELS[categoryFilter] ?? categoryFilter : null, range.short !== 'All time' ? range.short : null]
       .filter(Boolean)
       .join(', '),
   ].filter(Boolean).join(': ') || 'Spend'
@@ -387,37 +344,13 @@ export default function ClientsPage() {
               <option value="private">Private</option>
               <option value="other">Other</option>
             </select>
-            <select
-              value={period}
-              onChange={e => { setPeriod(e.target.value as Period); setCurrentPage(1) }}
-              className={`${inputCls} min-h-[44px] md:min-h-9`}
-              aria-label="Period"
-            >
-              <option value="all">All time</option>
-              <option value="this_month">This month</option>
-              <option value="last_month">Last month</option>
-              <option value="this_year">This year</option>
-              <option value="last_year">Last year</option>
-              <option value="custom">Custom dates</option>
-            </select>
-            {period === 'custom' && (
-              <div className="flex items-center gap-2 flex-wrap">
-                <label className="text-sm text-muted">From</label>
-                <input
-                  type="date"
-                  value={customFrom}
-                  onChange={e => { setCustomFrom(e.target.value); setCurrentPage(1) }}
-                  className={`${inputCls} min-h-[44px] md:min-h-9`}
-                />
-                <label className="text-sm text-muted">To</label>
-                <input
-                  type="date"
-                  value={customTo}
-                  onChange={e => { setCustomTo(e.target.value); setCurrentPage(1) }}
-                  className={`${inputCls} min-h-[44px] md:min-h-9`}
-                />
-              </div>
-            )}
+            <PeriodFilter
+              key={period === 'all' && customFrom === '' && customTo === '' ? 'reset' : 'set'}
+              period={period}
+              customFrom={customFrom}
+              customTo={customTo}
+              onChange={next => { setPeriod(next.period); setCustomFrom(next.customFrom); setCustomTo(next.customTo); setCurrentPage(1) }}
+            />
             <div className="flex items-center gap-2">
               <label className="text-sm text-muted whitespace-nowrap">Min spend £</label>
               <input
