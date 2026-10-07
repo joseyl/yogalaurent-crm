@@ -23,6 +23,52 @@ interface Purchase {
   category: string
   edition: string | null
   cohort_year: number | null
+  order_ref?: string | null
+  amount_paid_gbp?: number | null
+  payment_option?: string | null
+  balance_due_date?: string | null
+  instalments?: { paid_at: string; amount: number }[]
+}
+
+/**
+ * Order line under a purchase: the order number for any order that has one (website,
+ * WooCommerce), how it is being paid, what is paid and what is outstanding, and the
+ * plan instalments received.
+ */
+function PaymentLine({ p }: { p: Purchase }) {
+  const total = Number(p.amount_gbp ?? 0)
+  const paid = p.amount_paid_gbp ?? null
+  const instalments = p.instalments ?? []
+  const planned = p.payment_option === 'instalments' || p.payment_option === 'deposit'
+  const owing = total > 0 && paid !== null && paid < total
+  if (!p.order_ref && !planned && !owing && instalments.length === 0) return null
+  const fmtDay = (iso: string) => new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Europe/London' })
+  const parts: string[] = []
+  if (p.order_ref) parts.push(`Order ${p.order_ref}`)
+  if (p.payment_option === 'instalments') parts.push('Monthly payment plan')
+  else if (p.payment_option === 'deposit') parts.push('Deposit and balance')
+  if (total > 0) {
+    if (paid === null) {
+      if (planned) parts.push('Amount paid not recorded')
+    } else if (paid >= total) {
+      parts.push('Paid in full')
+    } else {
+      parts.push(`Paid ${formatGBP(paid)} of ${formatGBP(total)}`, `${formatGBP(total - paid)} outstanding`)
+      if (p.balance_due_date) parts.push(`due ${fmtDay(p.balance_due_date)}`)
+    }
+  }
+  return (
+    <div className="px-3 pb-2.5 pt-1 border-b border-card-border text-xs">
+      <p className={owing ? 'text-heading font-medium' : 'text-muted'} style={{ paddingLeft: 98 }}>{parts.join(' · ')}</p>
+      {instalments.length > 0 && (
+        <ul className="text-muted mt-1 space-y-0.5" style={{ paddingLeft: 98 }}>
+          {instalments.map((i, k) => (
+            <li key={k}>{fmtDay(i.paid_at)} · {formatGBP(i.amount)} · instalment</li>
+          ))}
+        </ul>
+      )}
+    </div>
+  )
 }
 
 interface Attendance {
@@ -798,7 +844,7 @@ export default function ClientTabs({ personId, purchases, attendance, leads, pro
                                   >
                                     {formatGBP(Number(p.amount_gbp))}
                                   </span>
-                                  <span className="text-xs text-gray-500 flex-1 min-w-0 truncate">{p.notes ?? '—'}</span>
+                                  <span className="text-xs text-gray-500 flex-1 min-w-0 truncate">{p.notes ?? ''}</span>
                                   <div className="flex items-center gap-0.5 shrink-0">
                                     <div className="relative group">
                                       <button onClick={() => startEditPurchase(p)} style={iconBtnStyle}>
@@ -823,6 +869,7 @@ export default function ClientTabs({ personId, purchases, attendance, leads, pro
                                   </div>
                                 </div>
                               )}
+                              {editingId !== p.id && <PaymentLine p={p} />}
                               {refundingId === p.id && (
                                 <div className="px-3 py-3 border-b border-card-border">
                                   <div className="border border-amber-200 rounded-lg p-3 bg-amber-subtle">

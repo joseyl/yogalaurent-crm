@@ -21,7 +21,7 @@ export default async function ClientDetailPage({ params }: Props) {
     supabase.from('people').select('*').eq('id', id).maybeSingle(),
     supabase
       .from('purchases')
-      .select('id, product_id, amount_gbp, purchase_date, notes, edition, cohort_year, products(name, category)')
+      .select('id, product_id, amount_gbp, purchase_date, notes, edition, cohort_year, order_ref, amount_paid_gbp, payment_option, balance_due_date, products(name, category)')
       .eq('person_id', id)
       .order('purchase_date', { ascending: false }),
     fetchAll<{ id: string; class_name: string; class_date: string; pass_used: string | null }>(
@@ -48,6 +48,23 @@ export default async function ClientDetailPage({ params }: Props) {
 
   if (!person) notFound()
 
+  // Training plan instalments applied to this client's orders (table training_payments)
+  const purchaseIds = (purchases ?? []).map(p => p.id as string)
+  const { data: instalmentRows } = purchaseIds.length
+    ? await supabase
+        .from('training_payments')
+        .select('purchase_id, paid_at, created_at, amount_gbp, added_gbp')
+        .in('purchase_id', purchaseIds)
+        .eq('status', 'applied')
+        .order('paid_at', { ascending: true })
+    : { data: [] as { purchase_id: string; paid_at: string | null; created_at: string; amount_gbp: number; added_gbp: number }[] }
+  const instalmentsByPurchase = new Map<string, { paid_at: string; amount: number }[]>()
+  for (const r of instalmentRows ?? []) {
+    const list = instalmentsByPurchase.get(r.purchase_id as string) ?? []
+    list.push({ paid_at: ((r.paid_at ?? r.created_at) as string), amount: Number(r.added_gbp ?? r.amount_gbp) })
+    instalmentsByPurchase.set(r.purchase_id as string, list)
+  }
+
   const purchasesData = (purchases ?? []).map(p => {
     const prod = p.products as unknown as { name: string; category: string } | null
     return {
@@ -60,6 +77,11 @@ export default async function ClientDetailPage({ params }: Props) {
       category: prod?.category ?? 'other',
       edition: p.edition as string | null,
       cohort_year: p.cohort_year as number | null,
+      order_ref: (p.order_ref as string | null) ?? null,
+      amount_paid_gbp: p.amount_paid_gbp == null ? null : Number(p.amount_paid_gbp),
+      payment_option: (p.payment_option as string | null) ?? null,
+      balance_due_date: (p.balance_due_date as string | null) ?? null,
+      instalments: instalmentsByPurchase.get(p.id as string) ?? [],
     }
   })
 
