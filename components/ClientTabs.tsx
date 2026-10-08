@@ -5,6 +5,7 @@ import { Edit2, Trash2, RefreshCcw, Plus, ChevronDown, ChevronRight } from 'luci
 import StatusBadge from '@/components/StatusBadge'
 import Card from '@/components/ui/Card'
 import { formatGBP } from '@/lib/utils'
+import RecordPaymentForm, { methodLabel, type RecordedPayment, type RecordPaymentResult } from '@/components/RecordPaymentForm'
 
 interface Product {
   id: string
@@ -28,21 +29,43 @@ interface Purchase {
   payment_option?: string | null
   balance_due_date?: string | null
   instalments?: { paid_at: string; amount: number }[]
+  payments?: RecordedPayment[]
 }
 
 /**
  * Order line under a purchase: the order number for any order that has one (website,
- * WooCommerce), how it is being paid, what is paid and what is outstanding, and the
- * plan instalments received.
+ * WooCommerce), how it is being paid, what is paid and what is outstanding, a
+ * "Record payment" button while money is owed, and the payment history: payments
+ * recorded by hand (order_payments) merged with the Stripe plan instalments, by date.
  */
-function PaymentLine({ p }: { p: Purchase }) {
+function PaymentLine({
+  p,
+  recording,
+  onStartRecord,
+  onCancelRecord,
+  onSaved,
+  onDeletePayment,
+  deletingPaymentId,
+}: {
+  p: Purchase
+  recording: boolean
+  onStartRecord: () => void
+  onCancelRecord: () => void
+  onSaved: (result: RecordPaymentResult) => void
+  onDeletePayment: (paymentId: string) => void
+  deletingPaymentId: string | null
+}) {
   const total = Number(p.amount_gbp ?? 0)
   const paid = p.amount_paid_gbp ?? null
   const instalments = p.instalments ?? []
+  const payments = p.payments ?? []
   const planned = p.payment_option === 'instalments' || p.payment_option === 'deposit'
   const owing = total > 0 && paid !== null && paid < total
-  if (!p.order_ref && !planned && !owing && instalments.length === 0) return null
+  if (!p.order_ref && !planned && !owing && instalments.length === 0 && payments.length === 0) return null
+  const canRecord = total > 0 && (paid === null || paid < total)
+  const outstanding = Math.round((total - (paid ?? 0)) * 100) / 100
   const fmtDay = (iso: string) => new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Europe/London' })
+  const londonDay = (iso: string) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/London', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(iso))
   const parts: string[] = []
   if (p.order_ref) parts.push(`Order ${p.order_ref}`)
   if (p.payment_option === 'instalments') parts.push('Monthly payment plan')
@@ -57,15 +80,60 @@ function PaymentLine({ p }: { p: Purchase }) {
       if (p.balance_due_date) parts.push(`due ${fmtDay(p.balance_due_date)}`)
     }
   }
+
+  // Payment history: hand-recorded payments and Stripe instalments, oldest first
+  type HistoryRow =
+    | { kind: 'payment'; day: string; amount: number; id: string; method: string; note: string | null }
+    | { kind: 'instalment'; day: string; amount: number }
+  const history: HistoryRow[] = [
+    ...payments.map(x => ({ kind: 'payment' as const, day: x.paid_on, amount: Number(x.amount_gbp), id: x.id, method: x.method, note: x.note })),
+    ...instalments.map(i => ({ kind: 'instalment' as const, day: londonDay(i.paid_at), amount: Number(i.amount) })),
+  ].sort((a, b) => (a.day < b.day ? -1 : a.day > b.day ? 1 : 0))
+  const listed = history.reduce((sum, h) => sum + h.amount, 0)
+  // What was paid before the history existed: at order time, or recorded before payments were kept
+  const before = paid !== null && history.length > 0 ? Math.round((paid - listed) * 100) / 100 : 0
+
   return (
     <div className="px-3 pb-2.5 pt-1 border-b border-card-border text-xs">
-      <p className={owing ? 'text-heading font-medium' : 'text-muted'} style={{ paddingLeft: 98 }}>{parts.join(' · ')}</p>
-      {instalments.length > 0 && (
+      <div className="flex items-center gap-2 flex-wrap" style={{ paddingLeft: 98 }}>
+        <p className={owing ? 'text-heading font-medium' : 'text-muted'}>{parts.join(' · ')}</p>
+        {canRecord && !recording && (
+          <button onClick={onStartRecord} className="btn-secondary text-xs">Record payment</button>
+        )}
+      </div>
+      {history.length > 0 && (
         <ul className="text-muted mt-1 space-y-0.5" style={{ paddingLeft: 98 }}>
-          {instalments.map((i, k) => (
-            <li key={k}>{fmtDay(i.paid_at)} · {formatGBP(i.amount)} · instalment</li>
+          {before > 0.005 && <li>At order or before history: {formatGBP(before)}</li>}
+          {history.map((h, k) => (
+            <li key={h.kind === 'payment' ? h.id : `i${k}`} className="flex items-center gap-2 flex-wrap">
+              <span>
+                {fmtDay(h.day)} · {formatGBP(h.amount)} · {h.kind === 'instalment' ? 'instalment' : methodLabel(h.method).toLowerCase()}
+                {h.kind === 'payment' && h.note ? ` · ${h.note}` : ''}
+              </span>
+              {h.kind === 'payment' && (
+                <button
+                  onClick={() => onDeletePayment(h.id)}
+                  disabled={deletingPaymentId === h.id}
+                  className="underline"
+                  style={{ color: 'var(--color-red-vivid)', background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
+                >
+                  {deletingPaymentId === h.id ? 'Deleting...' : 'Delete'}
+                </button>
+              )}
+            </li>
           ))}
         </ul>
+      )}
+      {recording && (
+        <div className="mt-2" style={{ paddingLeft: 98 }}>
+          <RecordPaymentForm
+            purchaseId={p.id}
+            outstanding={outstanding}
+            paidBlank={paid === null}
+            onSaved={onSaved}
+            onCancel={onCancelRecord}
+          />
+        </div>
       )}
     </div>
   )
@@ -250,6 +318,10 @@ export default function ClientTabs({ personId, purchases, attendance, leads, pro
   const [refundSaving, setRefundSaving] = useState(false)
   const [refundError, setRefundError] = useState<string | null>(null)
 
+  // Record payment form (one order at a time) and payment being deleted
+  const [recordingId, setRecordingId] = useState<string | null>(null)
+  const [deletingPaymentId, setDeletingPaymentId] = useState<string | null>(null)
+
   // Interests state — null means not yet fetched
   const [interests, setInterests] = useState<Interest[] | null>(null)
   const [showAddInterestForm, setShowAddInterestForm] = useState(false)
@@ -354,6 +426,7 @@ export default function ClientTabs({ personId, purchases, attendance, leads, pro
     const amt = Number(addForm.amount_gbp)
     if (addForm.amount_gbp === '' || isNaN(amt) || amt < 0) { setAddError('Please enter a valid amount (0 or more).'); return }
     if (!addForm.purchase_date) { setAddError('Please select a date.'); return }
+    if (addForm.edition && !addForm.cohort_year.trim()) { setAddError('Please enter the cohort year for this edition.'); return }
 
     setAddSaving(true)
     setAddError(null)
@@ -525,6 +598,36 @@ export default function ClientTabs({ personId, purchases, attendance, leads, pro
     }
   }
 
+  // ── Record and delete payments ────────────────────────────────────────────
+
+  function handlePaymentSaved(purchaseId: string, result: RecordPaymentResult) {
+    setPurchaseList(prev => prev.map(p => p.id === purchaseId ? {
+      ...p,
+      amount_paid_gbp: result.amount_paid,
+      payments: [...(p.payments ?? []), result.payment],
+    } : p))
+    setRecordingId(null)
+  }
+
+  async function handleDeletePayment(purchaseId: string, paymentId: string) {
+    if (!window.confirm('Delete this payment? Its amount will be taken off the amount paid.')) return
+    setDeletingPaymentId(paymentId)
+    try {
+      const res = await fetch(`/api/order-payments/${paymentId}`, { method: 'DELETE' })
+      const data = await res.json() as { amount_paid?: number | null; error?: string }
+      if (!res.ok) { window.alert(data.error ?? 'Could not delete the payment.'); return }
+      setPurchaseList(prev => prev.map(p => p.id === purchaseId ? {
+        ...p,
+        amount_paid_gbp: data.amount_paid ?? null,
+        payments: (p.payments ?? []).filter(x => x.id !== paymentId),
+      } : p))
+    } catch {
+      window.alert('Network error. Nothing was deleted.')
+    } finally {
+      setDeletingPaymentId(null)
+    }
+  }
+
   // ── Add interest ──────────────────────────────────────────────────────────
 
   function openAddInterestForm() {
@@ -635,21 +738,24 @@ export default function ClientTabs({ personId, purchases, attendance, leads, pro
                     <>
                       <div>
                         <label className="block text-xs text-gray-500 mb-1">Edition</label>
-                        <input
-                          type="text"
-                          placeholder="e.g. Winter 2021, Spring 2025"
+                        <select
                           value={addForm.edition}
                           onChange={e => setAddForm(f => ({ ...f, edition: e.target.value }))}
                           style={formInputStyle}
-                        />
+                        >
+                          <option value="">No edition</option>
+                          {['Winter', 'Spring', 'Summer', 'Autumn'].map(season => (
+                            <option key={season} value={season}>{season}</option>
+                          ))}
+                        </select>
                       </div>
                       <div>
                         <label className="block text-xs text-gray-500 mb-1">Cohort Year</label>
                         <input
                           type="number"
-                          placeholder="e.g. 2025"
+                          placeholder="e.g. 2027"
                           min={2020}
-                          max={2030}
+                          max={2035}
                           value={addForm.cohort_year}
                           onChange={e => setAddForm(f => ({ ...f, cohort_year: e.target.value }))}
                           style={formInputStyle}
@@ -880,7 +986,17 @@ export default function ClientTabs({ personId, purchases, attendance, leads, pro
                                   </div>
                                 </div>
                               )}
-                              {editingId !== p.id && <PaymentLine p={p} />}
+                              {editingId !== p.id && (
+                                <PaymentLine
+                                  p={p}
+                                  recording={recordingId === p.id}
+                                  onStartRecord={() => { setRecordingId(p.id); setRefundingId(null) }}
+                                  onCancelRecord={() => setRecordingId(null)}
+                                  onSaved={result => handlePaymentSaved(p.id, result)}
+                                  onDeletePayment={paymentId => handleDeletePayment(p.id, paymentId)}
+                                  deletingPaymentId={deletingPaymentId}
+                                />
+                              )}
                               {refundingId === p.id && (
                                 <div className="px-3 py-3 border-b border-card-border">
                                   <div className="border border-amber-200 rounded-lg p-3 bg-amber-subtle">

@@ -80,43 +80,6 @@ export async function GET() {
   return NextResponse.json({ rows, outstandingTotal })
 }
 
-/** Marks a purchase as paid in full. */
-export async function PATCH(request: Request) {
-  let body: { purchaseId?: string; amountPaid?: number }
-
-  try {
-    body = await request.json()
-  } catch {
-    return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
-  }
-
-  if (!body.purchaseId) {
-    return NextResponse.json({ error: 'purchaseId is required' }, { status: 400 })
-  }
-
-  const { data: purchase, error: readError } = await supabaseAdmin
-    .from('purchases')
-    .select('amount_gbp')
-    .eq('id', body.purchaseId)
-    .single()
-
-  if (readError || !purchase) {
-    return NextResponse.json({ error: 'Purchase not found' }, { status: 404 })
-  }
-
-  const amountPaid =
-    typeof body.amountPaid === 'number' && isFinite(body.amountPaid)
-      ? body.amountPaid
-      : Number(purchase.amount_gbp ?? 0)
-
-  const { error } = await supabaseAdmin
-    .from('purchases')
-    .update({ amount_paid_gbp: amountPaid })
-    .eq('id', body.purchaseId)
-
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
-  }
-
-  return NextResponse.json({ ok: true, amountPaid })
-}
+// Marking a payment is done through POST /api/purchases/[id]/payments (migration 010),
+// so every payment gets a date, a method and a history row. The old PATCH here, which
+// set amount paid with no history, has been removed.

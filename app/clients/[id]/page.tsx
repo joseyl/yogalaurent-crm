@@ -65,6 +65,28 @@ export default async function ClientDetailPage({ params }: Props) {
     instalmentsByPurchase.set(r.purchase_id as string, list)
   }
 
+  // Payments recorded by hand against this client's orders (table order_payments, migration 010)
+  const { data: paymentRows } = purchaseIds.length
+    ? await supabase
+        .from('order_payments')
+        .select('id, purchase_id, amount_gbp, paid_on, method, note, created_at')
+        .in('purchase_id', purchaseIds)
+        .order('paid_on', { ascending: true })
+        .order('created_at', { ascending: true })
+    : { data: [] as { id: string; purchase_id: string; amount_gbp: number; paid_on: string; method: string; note: string | null; created_at: string }[] }
+  const paymentsByPurchase = new Map<string, { id: string; amount_gbp: number; paid_on: string; method: string; note: string | null }[]>()
+  for (const r of paymentRows ?? []) {
+    const list = paymentsByPurchase.get(r.purchase_id as string) ?? []
+    list.push({
+      id: r.id as string,
+      amount_gbp: Number(r.amount_gbp),
+      paid_on: r.paid_on as string,
+      method: r.method as string,
+      note: (r.note as string | null) ?? null,
+    })
+    paymentsByPurchase.set(r.purchase_id as string, list)
+  }
+
   const purchasesData = (purchases ?? []).map(p => {
     const prod = p.products as unknown as { name: string; category: string } | null
     return {
@@ -82,6 +104,7 @@ export default async function ClientDetailPage({ params }: Props) {
       payment_option: (p.payment_option as string | null) ?? null,
       balance_due_date: (p.balance_due_date as string | null) ?? null,
       instalments: instalmentsByPurchase.get(p.id as string) ?? [],
+      payments: paymentsByPurchase.get(p.id as string) ?? [],
     }
   })
 

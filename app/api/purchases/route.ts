@@ -13,6 +13,14 @@ export async function POST(request: NextRequest) {
 
   const { person_id, product_id, amount_gbp, purchase_date, notes } = body
 
+  // Training edition and cohort year from the add purchase form (they were sent but never saved before 8 Oct 2026)
+  const edition = typeof body.edition === 'string' && body.edition.trim() ? body.edition.trim() : null
+  const cohortRaw = body.cohort_year
+  const cohort_year = cohortRaw === undefined || cohortRaw === null || cohortRaw === '' ? null : Number(cohortRaw)
+  if (cohort_year !== null && (!Number.isInteger(cohort_year) || cohort_year < 2020 || cohort_year > 2035)) {
+    return NextResponse.json({ error: 'Cohort year must be a year between 2020 and 2035.' }, { status: 400 })
+  }
+
   if (!person_id || !product_id || amount_gbp === undefined || amount_gbp === null || !purchase_date) {
     return NextResponse.json(
       { error: 'person_id, product_id, amount_gbp, and purchase_date are required.' },
@@ -28,6 +36,8 @@ export async function POST(request: NextRequest) {
       amount_gbp: Number(amount_gbp),
       purchase_date,
       notes: notes ?? null,
+      edition,
+      cohort_year,
     })
     .select('id')
     .single()

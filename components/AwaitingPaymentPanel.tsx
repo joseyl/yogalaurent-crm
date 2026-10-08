@@ -1,9 +1,10 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, Fragment } from 'react'
 import Link from 'next/link'
 import { formatGBP } from '@/lib/utils'
 import Collapsible from '@/components/ui/Collapsible'
+import RecordPaymentForm, { type RecordPaymentResult } from '@/components/RecordPaymentForm'
 
 interface Row {
   id: string
@@ -34,7 +35,7 @@ export default function AwaitingPaymentPanel() {
   const [rows, setRows] = useState<Row[]>([])
   const [outstandingTotal, setOutstandingTotal] = useState(0)
   const [loaded, setLoaded] = useState(false)
-  const [busy, setBusy] = useState<string | null>(null)
+  const [openId, setOpenId] = useState<string | null>(null)
 
   useEffect(() => {
     fetch('/api/awaiting-payment')
@@ -47,22 +48,23 @@ export default function AwaitingPaymentPanel() {
       .catch(() => setLoaded(true))
   }, [])
 
-  async function markPaid(row: Row) {
-    if (busy) return
-    setBusy(row.id)
-    try {
-      const res = await fetch('/api/awaiting-payment', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ purchaseId: row.id }),
-      })
-      if (res.ok) {
-        setRows(prev => prev.filter(r => r.id !== row.id))
-        setOutstandingTotal(prev => Math.round((prev - row.outstanding) * 100) / 100)
-      }
-    } finally {
-      setBusy(null)
+  // "Mark paid" opens the record-payment form, filled in with the outstanding amount,
+  // today's date and bank transfer. A part payment keeps the row with the new balance.
+  function handleSaved(row: Row, result: RecordPaymentResult) {
+    const paidNow = result.payment.amount_gbp
+    const outstanding = result.outstanding ?? Math.round((row.outstanding - paidNow) * 100) / 100
+    if (outstanding <= 0) {
+      setRows(prev => prev.filter(r => r.id !== row.id))
+    } else {
+      setRows(prev => prev.map(r => r.id === row.id ? {
+        ...r,
+        paid: result.amount_paid ?? r.paid + paidNow,
+        outstanding,
+        kind: 'balance',
+      } : r))
     }
+    setOutstandingTotal(prev => Math.round((prev - paidNow) * 100) / 100)
+    setOpenId(null)
   }
 
   const count = loaded ? rows.length : '-'
@@ -89,8 +91,8 @@ export default function AwaitingPaymentPanel() {
           const overdue = row.balance_due_date ? daysUntil(row.balance_due_date) < 0 : false
 
           return (
+            <Fragment key={row.id}>
             <div
-              key={row.id}
               className="flex items-center justify-between py-2 border-b border-card-border last:border-0 gap-2"
             >
               <Link
@@ -120,14 +122,29 @@ export default function AwaitingPaymentPanel() {
                   : `Balance ${formatGBP(row.outstanding)}`}
               </span>
 
-              <button
-                onClick={() => markPaid(row)}
-                disabled={busy === row.id}
-                className="btn-secondary shrink-0 text-xs"
-              >
-                {busy === row.id ? 'Saving...' : 'Mark paid'}
-              </button>
+              {openId !== row.id && (
+                <button
+                  onClick={() => setOpenId(row.id)}
+                  className="btn-secondary shrink-0 text-xs"
+                >
+                  Mark paid
+                </button>
+              )}
             </div>
+            {openId === row.id && (
+              <div className="py-2 border-b border-card-border">
+                <RecordPaymentForm
+                  purchaseId={row.id}
+                  outstanding={row.outstanding}
+                  paidBlank={false}
+                  prefillOutstanding
+                  title={`Mark paid: ${row.product ?? 'order'}${row.order_ref ? ` · ${row.order_ref}` : ''}`}
+                  onSaved={result => handleSaved(row, result)}
+                  onCancel={() => setOpenId(null)}
+                />
+              </div>
+            )}
+            </Fragment>
           )
         })
       )}
