@@ -1,5 +1,6 @@
 import { supabaseAdmin } from '@/lib/supabase-admin'
 import { fetchAll } from '@/lib/fetchAll'
+import { MomencePeople, momenceImportSettings } from '@/lib/momencePeople'
 import {
   login,
   getSessions,
@@ -61,22 +62,12 @@ export async function runMomenceSync(trigger: 'cron' | 'manual'): Promise<SyncRe
   try {
     const stepMs: Record<string, number> = {}
 
-    // Step b: Load people for email matching
+    // Step b: Load people for matching (Momence member number, then email, then alt_email).
+    // New people are created from bookings only once the Momence import is live
+    // (momence_import_settings); until then Zapier still creates them.
     const t0 = Date.now()
-    const people = await fetchAll<{ id: string; email: string | null; alt_email: string | null }>(
-      () => supabaseAdmin.from('people').select('id,email,alt_email'),
-    )
-    const byEmail = new Map<string, string>()
-    const byAltEmail = new Map<string, string>()
-    for (const p of people) {
-      if (p.email) byEmail.set(p.email.toLowerCase().trim(), p.id)
-      if (p.alt_email) byAltEmail.set(p.alt_email.toLowerCase().trim(), p.id)
-    }
-    function matchPerson(email: string | null | undefined): string | null {
-      if (!email) return null
-      const e = email.toLowerCase().trim()
-      return byEmail.get(e) ?? byAltEmail.get(e) ?? null
-    }
+    const people = await MomencePeople.load()
+    const createPeople = (await momenceImportSettings()).mode === 'live'
     stepMs.people_load = Date.now() - t0
 
     // Step c: Login and fetch sessions (7 days ago → 90 days ahead)
@@ -113,11 +104,14 @@ export async function runMomenceSync(trigger: 'cron' | 'manual'): Promise<SyncRe
 
     // Step d: Upsert attendance_v2 (omit pass_used and duplicate_of_momence)
     const t3 = Date.now()
-    const attendanceRows = allPairs.map(({ sessionId, sessionName, sessionStartsAt, booking }) => {
+    const attendanceRows = []
+    for (const { sessionId, sessionName, sessionStartsAt, booking } of allPairs) {
       const member = booking.member ?? {}
       const email = (member.email ?? '').toLowerCase().trim()
+      const ref = { memberId: member.id, email, firstName: member.firstName, lastName: member.lastName }
+      const personId = createPeople ? await people.matchOrCreate(ref) : people.match(ref)
       const classDate = sessionStartsAt ? londonDate(new Date(sessionStartsAt)) : null
-      return {
+      attendanceRows.push({
         source: 'momence',
         source_booking_id: String(booking.id),
         momence_session_id: sessionId ? String(sessionId) : null,
@@ -131,10 +125,12 @@ export async function runMomenceSync(trigger: 'cron' | 'manual'): Promise<SyncRe
         cancelled: !!(booking.cancelledAt),
         cancelled_at: booking.cancelledAt ?? null,
         checked_in: !!booking.checkedIn,
-        person_id: matchPerson(email),
-      }
-    })
+        person_id: personId,
+      })
+    }
     await upsertBatched('attendance_v2', attendanceRows, 'source,source_booking_id')
+    await people.saveMemberNumbers()
+    if (people.created > 0) stepMs.people_created = people.created
     stepMs.attendance_upsert = Date.now() - t3
 
     // Step e: Insert new class names into class_labels with label 'unlabelled'

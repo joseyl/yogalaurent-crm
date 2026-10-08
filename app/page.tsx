@@ -37,6 +37,12 @@ function formatUKDateTime(isoString: string | null | undefined): string {
   }).format(new Date(isoString))
 }
 
+// A London calendar date (YYYY-MM-DD) as "19 Oct 2026"
+function formatUKDate(dateStr: string): string {
+  return new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' })
+    .format(new Date(dateStr + 'T00:00:00Z'))
+}
+
 function daysSince(dateStr: string | null): number {
   if (!dateStr) return 999
   return Math.floor((Date.now() - new Date(dateStr).getTime()) / (1000 * 60 * 60 * 24))
@@ -93,6 +99,9 @@ async function fetchDashboardData() {
     { data: unmatchedRows, count: unmatchedCount, error: unmatchedError },
     { data: toSortRows, count: toSortCount, error: toSortError },
     { data: refundRows, error: refundError },
+    { data: momenceSettings, error: momenceSettingsError },
+    { data: latestSalesRun, error: latestSalesRunError },
+    { data: momenceAttentionRows, count: momenceAttentionCount, error: momenceAttentionError },
   ] = await Promise.all([
     supabase.from('people').select('*', { count: 'exact', head: true }).eq('status', 'client'),
     supabase.from('leads').select('*', { count: 'exact', head: true }).in('status', ['new', 'contacted', 'quoted']),
@@ -124,6 +133,13 @@ async function fetchDashboardData() {
     // the rest show for 30 days (supabase/migrations/008_payment_link_sales.sql)
     supabase.from('payment_link_payments').select('id, paid_at, amount_gbp, amount_original, currency, description, note', { count: 'exact' }).eq('status', 'to_sort').order('paid_at', { ascending: false }).limit(50),
     supabase.from('payment_link_refunds').select('id, refunded_at, updated_at, refunded_original, currency, status, kept_gbp, note').or(`status.eq.unmatched,updated_at.gte.${thirtyDaysAgoIso}`).order('updated_at', { ascending: false }).limit(100),
+    // Momence sales import (supabase/migrations/009_momence_sales.sql): switch, last run, and
+    // lines needing a look (to sort; refund or missing not yet checked)
+    supabase.from('momence_import_settings').select('mode, start_date').eq('id', 1).maybeSingle(),
+    supabase.from('momence_sales_runs').select('status, mode, started_at, finished_at, lines_read, new_lines, recorded, to_sort, error').order('started_at', { ascending: false }).limit(1).maybeSingle(),
+    supabase.from('momence_sales').select('id, payment_date, item, money_gbp, status, refund_seen_at, refunded_gbp, missing_since, note', { count: 'exact' })
+      .or('status.eq.to_sort,and(checked_at.is.null,refund_seen_at.not.is.null),and(checked_at.is.null,missing_since.not.is.null)')
+      .order('payment_date', { ascending: false }).limit(50),
   ])
 
   // Summary
@@ -262,6 +278,15 @@ async function fetchDashboardData() {
         recentRefunds: refunds.filter(r => r.status !== 'unmatched' && r.updated_at >= thirtyDaysAgoIso),
       }
     })(),
+    // ok is false if the check could not be read, so the page never shows a false "nothing to sort"
+    momenceSalesCheck: {
+      ok: !momenceSettingsError && !latestSalesRunError && !momenceAttentionError && momenceAttentionCount !== null,
+      mode: ((momenceSettings?.mode as string | undefined) ?? 'off'),
+      startDate: (momenceSettings?.start_date as string | null | undefined) ?? null,
+      lastRun: latestSalesRun as { status: string; mode: string | null; started_at: string; finished_at: string | null; lines_read: number | null; new_lines: number | null; recorded: number | null; to_sort: number | null; error: string | null } | null,
+      count: momenceAttentionCount ?? 0,
+      rows: (momenceAttentionRows ?? []) as { id: string; payment_date: string; item: string; money_gbp: number | string; status: string; refund_seen_at: string | null; refunded_gbp: number | string; missing_since: string | null; note: string | null }[],
+    },
     // ok is false if the check could not be read, so the page never hides a problem
     futureCheck: {
       ok: !futureError && futureCount !== null,
@@ -273,7 +298,7 @@ async function fetchDashboardData() {
 }
 
 export default async function DashboardPage() {
-  const { summary, staleLeads, goneQuiet, categoryRevenue, trend, latestSync, latestSyncUnavailable, webhookCheck, unmatchedCheck, paymentLinkCheck, futureCheck } = await fetchDashboardData()
+  const { summary, staleLeads, goneQuiet, categoryRevenue, trend, latestSync, latestSyncUnavailable, webhookCheck, unmatchedCheck, paymentLinkCheck, momenceSalesCheck, futureCheck } = await fetchDashboardData()
 
   const dotColor = latestSyncUnavailable
     ? 'var(--color-amber-vivid)'
@@ -446,6 +471,76 @@ export default async function DashboardPage() {
           </p>
           <MomenceRefreshButton />
         </div>
+
+        {/* Momence sales import status, and lines needing a look */}
+        {(() => {
+          const m = momenceSalesCheck
+          const modeLabel: Record<string, string> = {
+            off: 'switched off',
+            record_only: 'record only (parallel week, no purchases written)',
+            live: `live${m.startDate ? ` from ${formatUKDate(m.startDate)}` : ''}`,
+          }
+          const run = m.lastRun
+          const bad = !m.ok || run?.status === 'failed' || m.count > 0
+          const statusLabel: Record<string, string> = { to_sort: 'to sort' }
+          return (
+            <>
+              <div className="card flex items-center gap-3 p-4 mb-3">
+                <span
+                  className="w-2.5 h-2.5 flex-shrink-0 rounded-full"
+                  style={{
+                    background: !m.ok
+                      ? 'var(--color-amber-vivid)'
+                      : m.mode === 'off'
+                      ? 'var(--color-muted)'
+                      : bad
+                      ? 'var(--color-red-vivid)'
+                      : 'var(--color-green-vivid)',
+                  }}
+                />
+                <p className="text-sm text-body">
+                  {!m.ok
+                    ? 'Momence sales import status unavailable'
+                    : <>
+                        Momence sales import: {modeLabel[m.mode] ?? m.mode}
+                        {run && m.mode !== 'off' && (
+                          <>
+                            . Last run {formatUKDateTime(run.finished_at ?? run.started_at)},{' '}
+                            {run.status === 'success'
+                              ? `${run.lines_read ?? 0} lines read, ${run.new_lines ?? 0} new`
+                              : run.status === 'failed'
+                              ? `Failed${run.error ? `: ${run.error}` : ''}`
+                              : run.status}
+                          </>
+                        )}
+                        {m.count > 0 && `. Needs a look: ${m.count}`}
+                      </>}
+                </p>
+              </div>
+
+              {m.ok && m.count > 0 && (
+                <div className="mb-3">
+                  <Collapsible title="Momence sales needing a look" count={m.count} tone="danger">
+                    <ul className="space-y-2 px-4 pb-4 text-sm text-body md:px-5">
+                      {m.rows.map(r => (
+                        <li key={r.id}>
+                          {formatUKDateTime(r.payment_date)}, {formatGBP(Number(r.money_gbp))}, {r.item}
+                          {r.status === 'to_sort' && <>, {statusLabel[r.status]}</>}
+                          {r.refund_seen_at && <>, refund {formatGBP(Number(r.refunded_gbp))} shown in Momence</>}
+                          {r.missing_since && <>, no longer in the Momence report</>}
+                          {r.note && <span className="block text-xs text-muted">{r.note}</span>}
+                        </li>
+                      ))}
+                      {m.count > m.rows.length && (
+                        <li className="text-xs text-muted">Showing latest {m.rows.length} lines</li>
+                      )}
+                    </ul>
+                  </Collapsible>
+                </div>
+              )}
+            </>
+          )
+        })()}
 
         {/* Webhook problems, last 7 days */}
         <div className="card flex items-center gap-3 p-4 mb-6">

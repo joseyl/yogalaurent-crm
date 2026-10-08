@@ -3,6 +3,7 @@ import { validateWebhookSecret } from '@/lib/webhook-auth'
 import { findOrCreatePerson } from '@/lib/find-or-create-person'
 import { supabaseAdmin } from '@/lib/supabase-admin'
 import { londonDateOf } from '@/lib/passRenewals'
+import { momenceApiOwnsPurchases } from '@/lib/momencePeople'
 
 export async function GET() {
   return NextResponse.json({ status: 'ok', route: 'momence-class-booking' })
@@ -87,7 +88,14 @@ export async function POST(request: NextRequest) {
   let purchaseCreated = false
   let purchaseSkipReason: string | null = null
 
-  if (saleValue > 0) {
+  // From the Momence import start date, the API import (lib/momenceSales.ts) owns Momence
+  // purchases. This old Zapier route then only logs, so nothing is counted twice.
+  const apiOwns = saleValue > 0 && (await momenceApiOwnsPurchases(londonDateOf(new Date())))
+  if (apiOwns) {
+    purchaseSkipReason = 'Momence API import owns purchases from its start date: not written by the Zapier route'
+  }
+
+  if (saleValue > 0 && !apiOwns) {
     // Guard: purchaseDate must be resolvable
     if (!rawClassDate) {
       const msg = `Missing or invalid purchase_date, received: ${rawClassDate}`

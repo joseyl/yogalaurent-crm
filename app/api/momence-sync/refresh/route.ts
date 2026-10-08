@@ -1,9 +1,11 @@
 import { NextResponse } from 'next/server'
 import { runMomenceSync } from '@/lib/momenceSync'
+import { runMomenceSales } from '@/lib/momenceSales'
 import { supabaseAdmin } from '@/lib/supabase-admin'
 
 /**
- * Refresh now: runs the nightly Momence copy on demand from the dashboard.
+ * Refresh now: runs the nightly Momence copy on demand from the dashboard, then the
+ * Momence sales import (lib/momenceSales.ts; does nothing while its switch is off).
  *
  * Behind the login (not a public route in middleware.ts). Same work as the nightly job,
  * recorded in sync_runs with trigger "manual". It does not ping Healthchecks, so the
@@ -43,7 +45,27 @@ export async function POST() {
 
   try {
     const result = await runMomenceSync('manual')
-    return NextResponse.json({ ok: true, ...result })
+
+    // Sales import, unless one is already running. A failure here does not hide the copy result.
+    let sales: Record<string, unknown> | null = null
+    let salesError: string | null = null
+    const { data: salesRunning } = await supabaseAdmin
+      .from('momence_sales_runs')
+      .select('id')
+      .eq('status', 'running')
+      .gte('started_at', since)
+      .limit(1)
+    if (salesRunning && salesRunning.length > 0) {
+      salesError = 'Sales import already running'
+    } else {
+      try {
+        sales = { ...(await runMomenceSales('manual')) }
+      } catch (err) {
+        salesError = err instanceof Error ? err.message : String(err)
+      }
+    }
+
+    return NextResponse.json({ ok: true, ...result, sales, salesError })
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
     return NextResponse.json({ error: msg }, { status: 500 })

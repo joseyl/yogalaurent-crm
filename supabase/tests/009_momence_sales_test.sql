@@ -1,0 +1,534 @@
+-- TEST ONLY. Runs migration 009 and checks it on made-up rows, then undoes everything.
+-- Paste the whole file into the Supabase SQL Editor and run it.
+-- It ALWAYS ends in a red error on purpose: that error is what undoes everything.
+-- Read the message: "TEST PASSED: 15 of 15 checks" is good. "TEST FAILED" lists what went wrong.
+-- Generated from supabase/migrations/009_momence_sales.sql (without its final check).
+
+begin;
+
+-- 009_momence_sales.sql
+-- Momence sales from the Momence Total Sales report (API), replacing Zapier.
+-- Run by hand in the Supabase SQL Editor. Run supabase/tests/009_momence_sales_test.sql
+-- first: it runs all of this plus checks, then undoes everything.
+--
+-- What it adds:
+--   momence_import_settings  one row: mode (off, record_only, live), start date, and the
+--                            products used for classes, whole series and private sessions
+--   momence_items            Momence item (category and name) to CRM product: sale with a
+--                            product, not_sale, or to_sort (waits on the dashboard)
+--   momence_sales            one row per Momence sale line, unique by sale_key (saleItemId,
+--                            else the payment id), so a line can never be counted twice
+--   momence_sales_runs       one row per import run (nightly or Refresh now)
+--   people.momence_member_id the person's Momence member number, saved when first matched
+--   products                 10 Class Pass - Autorenew, Online Series, Class Credit Top-up
+--   record_momence_sale()    check and save one line in one locked step
+--   apply_momence_sale()     turns one saved line into a purchase, or explains why not
+--   retry_momence_sales()    re-tries every line not yet recorded, e.g. after mapping an
+--                            item or switching the mode to live
+--
+-- Rules:
+--   Money = sale value minus the part paid in Momence credits. A line with no money (paid
+--   in credits, for example a private session from a pack) never becomes a purchase.
+--   Item table first. Then: events are Drop-in Class, or Online Series when the whole
+--   series was bought; private sessions paid in money are Private 1-2-1 Session. Anything
+--   else new is added to momence_items as to_sort and waits.
+--   mode off: nothing happens. record_only: lines are saved and marked with what they would
+--   do (preview), no purchases. live: purchases from start_date (London payment date) on;
+--   earlier lines are saved as before_start and never become purchases.
+--   Purchase: London payment date, money amount, paid in full, source momence.
+--   Refunds: the import has never seen one (no refunds in the 12 months to 8 Oct 2026), so a
+--   refund is saved and listed on the dashboard to check by hand, never applied on its own.
+--
+-- To remove:
+--   drop function if exists public.retry_momence_sales();
+--   drop function if exists public.record_momence_sale(jsonb);
+--   drop function if exists public.apply_momence_sale(uuid);
+--   drop table if exists public.momence_sales_runs;
+--   drop table if exists public.momence_sales;
+--   drop table if exists public.momence_items;
+--   drop table if exists public.momence_import_settings;
+--   alter table public.people drop column if exists momence_member_id;
+--   (the three new products stay; archive them by hand if not wanted)
+
+-- New products (skipped if a product of that name already exists)
+insert into public.products (name, category, base_name, entity)
+values
+  ('10 Class Pass - Autorenew', 'classes', 'Class Passes', 'Laurent Roure'),
+  ('Online Series', 'classes', 'Online Series', 'Laurent Roure'),
+  ('Class Credit Top-up', 'classes', 'Class Credit', 'Laurent Roure')
+on conflict (name) do nothing;
+
+alter table public.people add column if not exists momence_member_id bigint;
+create index if not exists people_momence_member_id_idx on public.people (momence_member_id);
+
+create table if not exists public.momence_import_settings (
+  id int primary key default 1 check (id = 1),
+  mode text not null default 'off' check (mode in ('off', 'record_only', 'live')),
+  start_date date,
+  dropin_product_id uuid references public.products(id),
+  series_product_id uuid references public.products(id),
+  private_session_product_id uuid references public.products(id),
+  updated_at timestamptz not null default now(),
+  constraint momence_import_live_needs_start check (mode <> 'live' or start_date is not null)
+);
+
+insert into public.momence_import_settings (id, mode, dropin_product_id, series_product_id, private_session_product_id)
+values (
+  1, 'off',
+  (select id from public.products where name = 'Drop-in Class'),
+  (select id from public.products where name = 'Online Series'),
+  (select id from public.products where name = 'Private 1-2-1 Session')
+)
+on conflict (id) do nothing;
+
+create table if not exists public.momence_items (
+  category text not null,
+  item text not null,
+  action text not null default 'to_sort' check (action in ('sale', 'not_sale', 'to_sort')),
+  product_id uuid references public.products(id),
+  note text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  primary key (category, item),
+  constraint momence_items_sale_needs_product check (action <> 'sale' or product_id is not null)
+);
+
+insert into public.momence_items (category, item, action, product_id)
+select v.category, v.item, 'sale', p.id
+from (values
+  ('membership', '10 Class Pass', '10 Class Pass'),
+  ('membership', '10 Class Pass - Autorenew', '10 Class Pass - Autorenew'),
+  ('membership', '5 Class Pass', '5 Class Pass'),
+  ('membership', 'Introductory Offer', 'Introductory Offer'),
+  ('membership', 'Standard Unlimited Pass - Regular Online Classes', 'Unlimited Pass'),
+  ('membership', '3 Private Online Sessions', 'Private Class Pack'),
+  ('membership', '10 Online Private Classes', 'Private Class Pack'),
+  ('membership', 'money-credit', 'Class Credit Top-up')
+) as v(category, item, product_name)
+join public.products p on p.name = v.product_name
+on conflict (category, item) do nothing;
+
+create table if not exists public.momence_sales (
+  id uuid primary key default gen_random_uuid(),
+  sale_key text not null,
+  sale_item_id bigint,
+  payment_transaction_id bigint,
+  category text not null,
+  item text not null,
+  event_type text,
+  payment_date timestamptz not null,
+  service_date timestamptz,
+  value_gbp numeric(10,2) not null default 0,
+  credits_gbp numeric(10,2) not null default 0,
+  money_gbp numeric(10,2) not null default 0,
+  refunded_gbp numeric(10,2) not null default 0,
+  payment_method text,
+  member_id bigint,
+  paying_member_id bigint,
+  email text,
+  customer_email text,
+  person_id uuid references public.people(id) on delete set null,
+  session_booking_id bigint,
+  bought_membership_id bigint,
+  appointment_reservation_id bigint,
+  status text not null default 'new'
+    check (status in ('new', 'preview', 'recorded', 'no_money', 'before_start', 'not_sale', 'to_sort')),
+  product_id uuid references public.products(id),
+  purchase_id uuid references public.purchases(id) on delete set null,
+  refund_seen_at timestamptz,
+  missing_since timestamptz,
+  checked_at timestamptz,
+  first_seen_at timestamptz not null default now(),
+  last_seen_at timestamptz not null default now(),
+  note text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create unique index if not exists momence_sales_sale_key on public.momence_sales (sale_key);
+create index if not exists momence_sales_payment_date_idx on public.momence_sales (payment_date);
+create index if not exists momence_sales_status_idx on public.momence_sales (status);
+
+create table if not exists public.momence_sales_runs (
+  id bigint generated always as identity primary key,
+  trigger text not null check (trigger in ('cron', 'manual')),
+  status text not null default 'running' check (status in ('running', 'success', 'failed', 'skipped')),
+  mode text,
+  date_from date,
+  date_to date,
+  lines_read int,
+  new_lines int,
+  recorded int,
+  to_sort int,
+  refunds_seen int,
+  missing int,
+  people_created int,
+  private_sessions int,
+  error text,
+  started_at timestamptz not null default now(),
+  finished_at timestamptz
+);
+
+alter table public.momence_import_settings enable row level security;
+alter table public.momence_items enable row level security;
+alter table public.momence_sales enable row level security;
+alter table public.momence_sales_runs enable row level security;
+revoke all on public.momence_import_settings from public, anon, authenticated;
+revoke all on public.momence_items from public, anon, authenticated;
+revoke all on public.momence_sales from public, anon, authenticated;
+revoke all on public.momence_sales_runs from public, anon, authenticated;
+grant select, insert, update, delete on public.momence_import_settings to service_role;
+grant select, insert, update, delete on public.momence_items to service_role;
+grant select, insert, update, delete on public.momence_sales to service_role;
+grant select, insert, update, delete on public.momence_sales_runs to service_role;
+
+-- Turns one saved line into a purchase, or saves why not.
+create or replace function public.apply_momence_sale(p_id uuid)
+returns text
+language plpgsql
+security invoker
+set search_path = public
+as $$
+declare
+  s momence_sales%rowtype;
+  cfg momence_import_settings%rowtype;
+  it momence_items%rowtype;
+  v_action text;
+  v_product uuid;
+  v_date date;
+  v_kept numeric(10,2);
+  v_purchase uuid;
+  v_notes text;
+begin
+  select * into s from momence_sales where id = p_id for update;
+  if not found then return 'not_found'; end if;
+  if s.status in ('recorded', 'no_money', 'before_start') then return 'already_' || s.status; end if;
+
+  select * into cfg from momence_import_settings where id = 1;
+  if not found or cfg.mode = 'off' then return 'off'; end if;
+
+  v_date := (s.payment_date at time zone 'Europe/London')::date;
+
+  if s.money_gbp <= 0 then
+    update momence_sales
+      set status = 'no_money', product_id = null,
+          note = case when s.credits_gbp > 0 then 'Paid in Momence credits: not counted as money.'
+                      else 'No money taken.' end,
+          updated_at = now()
+      where id = s.id;
+    return 'no_money';
+  end if;
+
+  select * into it from momence_items where category = s.category and item = s.item;
+  if found then
+    v_action := it.action;
+    v_product := it.product_id;
+  elsif s.category = 'event' then
+    v_action := 'sale';
+    v_product := case when s.event_type = 'course' then cfg.series_product_id else cfg.dropin_product_id end;
+  elsif s.category = 'appointment' then
+    v_action := 'sale';
+    v_product := cfg.private_session_product_id;
+  else
+    insert into momence_items (category, item, action) values (s.category, s.item, 'to_sort')
+      on conflict (category, item) do nothing;
+    v_action := 'to_sort';
+  end if;
+
+  if v_action = 'sale' and v_product is null then v_action := 'to_sort'; end if;
+
+  if v_action = 'not_sale' then
+    update momence_sales
+      set status = 'not_sale', product_id = null, note = 'Item marked not a sale in momence_items.', updated_at = now()
+      where id = s.id;
+    return 'not_sale';
+  end if;
+
+  if v_action = 'to_sort' then
+    update momence_sales
+      set status = 'to_sort', product_id = null,
+          note = 'New Momence item: choose a CRM product for it in momence_items, then retry.', updated_at = now()
+      where id = s.id;
+    return 'to_sort';
+  end if;
+
+  if s.person_id is null then
+    update momence_sales
+      set status = 'to_sort', product_id = v_product, note = 'No client found or created for this payer.', updated_at = now()
+      where id = s.id;
+    return 'to_sort';
+  end if;
+
+  if cfg.mode = 'record_only' then
+    update momence_sales set status = 'preview', product_id = v_product, note = null, updated_at = now()
+      where id = s.id;
+    return 'preview';
+  end if;
+
+  if v_date < cfg.start_date then
+    update momence_sales
+      set status = 'before_start', product_id = v_product,
+          note = 'Paid before the import start date ' || to_char(cfg.start_date, 'DD Mon YYYY') || ': not imported.',
+          updated_at = now()
+      where id = s.id;
+    return 'before_start';
+  end if;
+
+  v_kept := s.money_gbp;
+  v_notes := concat_ws('. ',
+    s.item,
+    case when s.category = 'event' and s.service_date is not null
+         then 'Class date ' || to_char((s.service_date at time zone 'Europe/London')::date, 'YYYY-MM-DD') end,
+    case when s.category = 'appointment' and s.service_date is not null
+         then 'Session date ' || to_char((s.service_date at time zone 'Europe/London')::date, 'YYYY-MM-DD') end,
+    case when s.credits_gbp > 0 then 'Part paid in Momence credits: ' || s.credits_gbp end,
+    'Momence sale ' || coalesce(s.sale_item_id::text, s.sale_key)
+  );
+
+  insert into purchases (person_id, product_id, amount_gbp, amount_paid_gbp, payment_option,
+                         purchase_date, source, notes)
+    values (s.person_id, v_product, v_kept, v_kept, 'full', v_date, 'momence', v_notes)
+    returning id into v_purchase;
+
+  update momence_sales
+    set status = 'recorded', product_id = v_product, purchase_id = v_purchase, note = null, updated_at = now()
+    where id = s.id;
+
+  return 'recorded';
+end;
+$$;
+
+-- Saves one line from the report in one locked step. A line seen before is only updated:
+-- last seen, person (if found later), refund (saved and flagged, never applied).
+create or replace function public.record_momence_sale(p jsonb)
+returns text
+language plpgsql
+security invoker
+set search_path = public
+as $$
+declare
+  s momence_sales%rowtype;
+  v_id uuid;
+  v_value numeric(10,2);
+  v_credits numeric(10,2);
+  v_refunded numeric(10,2);
+  v_person uuid;
+begin
+  perform pg_advisory_xact_lock(hashtext('momence_sale'));
+
+  if coalesce(p->>'sale_key', '') = '' or coalesce(p->>'payment_date', '') = '' then
+    return 'invalid';
+  end if;
+
+  v_value := coalesce(nullif(p->>'value', '')::numeric, 0);
+  v_credits := least(coalesce(nullif(p->>'credits', '')::numeric, 0), v_value);
+  v_refunded := coalesce(nullif(p->>'refunded', '')::numeric, 0);
+  v_person := nullif(p->>'person_id', '')::uuid;
+
+  select * into s from momence_sales where sale_key = p->>'sale_key' for update;
+
+  if found then
+    update momence_sales
+      set last_seen_at = now(),
+          missing_since = null,
+          person_id = coalesce(person_id, v_person),
+          updated_at = now()
+      where id = s.id;
+
+    if v_refunded > s.refunded_gbp then
+      update momence_sales
+        set refunded_gbp = v_refunded, refund_seen_at = now(), checked_at = null,
+            note = concat_ws('. ', nullif(note, ''), 'Momence shows a refund of ' || v_refunded || ': check the purchase by hand'),
+            updated_at = now()
+        where id = s.id;
+      return 'refund_seen';
+    end if;
+
+    -- Not recorded yet: try again (mode may now be live, the item mapped, or the payer found)
+    if s.status in ('new', 'preview', 'to_sort') then
+      return apply_momence_sale(s.id);
+    end if;
+
+    return 'seen';
+  end if;
+
+  insert into momence_sales (
+    sale_key, sale_item_id, payment_transaction_id, category, item, event_type,
+    payment_date, service_date, value_gbp, credits_gbp, money_gbp, refunded_gbp,
+    payment_method, member_id, paying_member_id, email, customer_email, person_id,
+    session_booking_id, bought_membership_id, appointment_reservation_id,
+    refund_seen_at, note
+  ) values (
+    p->>'sale_key', nullif(p->>'sale_item_id', '')::bigint, nullif(p->>'payment_transaction_id', '')::bigint,
+    coalesce(nullif(p->>'category', ''), '?'), coalesce(nullif(p->>'item', ''), '?'), nullif(p->>'event_type', ''),
+    (p->>'payment_date')::timestamptz, nullif(p->>'service_date', '')::timestamptz,
+    v_value, v_credits, greatest(v_value - v_credits, 0), v_refunded,
+    nullif(p->>'payment_method', ''), nullif(p->>'member_id', '')::bigint, nullif(p->>'paying_member_id', '')::bigint,
+    nullif(lower(p->>'email'), ''), nullif(lower(p->>'customer_email'), ''), v_person,
+    nullif(p->>'session_booking_id', '')::bigint, nullif(p->>'bought_membership_id', '')::bigint,
+    nullif(p->>'appointment_reservation_id', '')::bigint,
+    case when v_refunded > 0 then now() end,
+    case when v_refunded > 0 then 'Momence shows a refund of ' || v_refunded || ': check the purchase by hand' end
+  )
+  returning id into v_id;
+
+  return apply_momence_sale(v_id);
+end;
+$$;
+
+create or replace function public.retry_momence_sales()
+returns table (sale_id uuid, result text)
+language plpgsql
+security invoker
+set search_path = public
+as $$
+declare
+  x record;
+begin
+  perform pg_advisory_xact_lock(hashtext('momence_sale'));
+  for x in
+    select id from momence_sales
+    where status in ('new', 'preview', 'to_sort', 'not_sale')
+    order by payment_date, created_at
+  loop
+    sale_id := x.id;
+    result := apply_momence_sale(x.id);
+    return next;
+  end loop;
+end;
+$$;
+
+revoke all on function public.apply_momence_sale(uuid) from public, anon, authenticated;
+revoke all on function public.record_momence_sale(jsonb) from public, anon, authenticated;
+revoke all on function public.retry_momence_sales() from public, anon, authenticated;
+grant execute on function public.apply_momence_sale(uuid) to service_role;
+grant execute on function public.record_momence_sale(jsonb) to service_role;
+grant execute on function public.retry_momence_sales() to service_role;
+
+do $$
+declare
+  p1 uuid;
+  r text;
+  fails text := '';
+  passed int := 0;
+  v numeric;
+  d date;
+  s text;
+  n int;
+  n0 int;
+  pr text;
+  today date := (now() at time zone 'Europe/London')::date;
+  t_today text := (now())::text;
+  t_old text := (now() - interval '3 days')::text;
+begin
+  insert into people (email, first_name, last_name, status)
+    values ('momence-test-1@example.invalid', 'Test', 'One', 'client') returning id into p1;
+  select count(*) into n0 from purchases;
+
+  -- 1. Migration objects in place, mode off
+  select count(*) into n from momence_import_settings
+    where mode = 'off' and dropin_product_id is not null and series_product_id is not null and private_session_product_id is not null;
+  if n = 1 and (select count(*) from momence_items where action = 'sale') = 8 then passed := passed + 1;
+  else fails := fails || ' [1 setup: settings ' || n || ', items ' || (select count(*) from momence_items where action = 'sale') || ']'; end if;
+
+  -- 2. Mode off: the line is saved, nothing else happens
+  r := record_momence_sale(jsonb_build_object('sale_key', 'T1', 'sale_item_id', '901', 'category', 'event', 'item', 'TEST Hatha Yoga',
+         'event_type', 'fitness', 'payment_date', t_old, 'service_date', t_old, 'value', '12', 'credits', '0', 'person_id', p1));
+  select status into s from momence_sales where sale_key = 'T1';
+  if r = 'off' and s = 'new' then passed := passed + 1;
+  else fails := fails || ' [2 off: ' || r || ', ' || coalesce(s, '-') || ']'; end if;
+
+  -- 3. Record only: retry marks it preview under Drop-in Class, no purchase
+  update momence_import_settings set mode = 'record_only' where id = 1;
+  perform retry_momence_sales();
+  select ms.status, p.name into s, pr from momence_sales ms join products p on p.id = ms.product_id where ms.sale_key = 'T1';
+  select count(*) into n from purchases;
+  if s = 'preview' and pr = 'Drop-in Class' and n = n0 then passed := passed + 1;
+  else fails := fails || ' [3 preview: ' || coalesce(s, '-') || ', ' || coalesce(pr, '-') || ', purchases +' || (n - n0) || ']'; end if;
+
+  -- 4. Private session paid fully in credits: no money
+  r := record_momence_sale(jsonb_build_object('sale_key', 'T2', 'category', 'appointment', 'item', 'Online Private 1-2-1 Session',
+         'payment_date', t_today, 'value', '65', 'credits', '65', 'person_id', p1));
+  if r = 'no_money' then passed := passed + 1; else fails := fails || ' [4 credits: ' || r || ']'; end if;
+
+  -- 5. 5 Class Pass, 45 of 55 paid in credits: money 10, preview under 5 Class Pass
+  r := record_momence_sale(jsonb_build_object('sale_key', 'T3', 'category', 'membership', 'item', '5 Class Pass',
+         'payment_date', t_today, 'value', '55', 'credits', '45', 'person_id', p1));
+  select ms.money_gbp, p.name into v, pr from momence_sales ms join products p on p.id = ms.product_id where ms.sale_key = 'T3';
+  if r = 'preview' and v = 10 and pr = '5 Class Pass' then passed := passed + 1;
+  else fails := fails || ' [5 mixed: ' || r || ', ' || coalesce(v::text, '-') || ', ' || coalesce(pr, '-') || ']'; end if;
+
+  -- 6. New Momence item: waits, and is added to momence_items as to_sort
+  r := record_momence_sale(jsonb_build_object('sale_key', 'T4', 'category', 'membership', 'item', 'TEST 5 Class Pass - Autorenew',
+         'payment_date', t_today, 'value', '55', 'person_id', p1));
+  select action into s from momence_items where category = 'membership' and item = 'TEST 5 Class Pass - Autorenew';
+  if r = 'to_sort' and s = 'to_sort' then passed := passed + 1;
+  else fails := fails || ' [6 new item: ' || r || ', ' || coalesce(s, 'not added') || ']'; end if;
+
+  -- 7. No client: waits
+  r := record_momence_sale(jsonb_build_object('sale_key', 'T5', 'category', 'event', 'item', 'TEST Midweek Reset',
+         'event_type', 'fitness', 'payment_date', t_today, 'value', '12'));
+  if r = 'to_sort' then passed := passed + 1; else fails := fails || ' [7 no client: ' || r || ']'; end if;
+
+  -- 8. Same line again: still one row
+  r := record_momence_sale(jsonb_build_object('sale_key', 'T3', 'category', 'membership', 'item', '5 Class Pass',
+         'payment_date', t_today, 'value', '55', 'credits', '45', 'person_id', p1));
+  select count(*) into n from momence_sales where sale_key = 'T3';
+  if n = 1 and r = 'preview' then passed := passed + 1; else fails := fails || ' [8 repeat: ' || r || ', rows ' || n || ']'; end if;
+
+  -- 9. Live from today: the line from 3 days ago is before_start, today's lines become purchases
+  update momence_import_settings set mode = 'live', start_date = today where id = 1;
+  perform retry_momence_sales();
+  select status into s from momence_sales where sale_key = 'T1';
+  select pu.amount_gbp, pu.purchase_date, pu.source into v, d, pr
+    from purchases pu join momence_sales ms on ms.purchase_id = pu.id where ms.sale_key = 'T3';
+  if s = 'before_start' and v = 10 and d = today and pr = 'momence' then passed := passed + 1;
+  else fails := fails || ' [9 live: T1 ' || coalesce(s, '-') || ', T3 ' || coalesce(v::text, 'no purchase') || ' ' || coalesce(d::text, '-') || ']'; end if;
+
+  -- 10. Whole series bought in one go: Online Series
+  r := record_momence_sale(jsonb_build_object('sale_key', 'T6', 'category', 'event', 'item', 'TEST Somatic Series',
+         'event_type', 'course', 'payment_date', t_today, 'value', '62', 'person_id', p1));
+  select p.name into pr from momence_sales ms join products p on p.id = ms.product_id where ms.sale_key = 'T6';
+  if r = 'recorded' and pr = 'Online Series' then passed := passed + 1;
+  else fails := fails || ' [10 series: ' || r || ', ' || coalesce(pr, '-') || ']'; end if;
+
+  -- 11. Client found on a later night: the waiting line is recorded
+  r := record_momence_sale(jsonb_build_object('sale_key', 'T5', 'category', 'event', 'item', 'TEST Midweek Reset',
+         'event_type', 'fitness', 'payment_date', t_today, 'value', '12', 'person_id', p1));
+  if r = 'recorded' then passed := passed + 1; else fails := fails || ' [11 client later: ' || r || ']'; end if;
+
+  -- 12. Refund shown later: saved and flagged, purchase unchanged
+  r := record_momence_sale(jsonb_build_object('sale_key', 'T3', 'category', 'membership', 'item', '5 Class Pass',
+         'payment_date', t_today, 'value', '55', 'credits', '45', 'refunded', '10', 'person_id', p1));
+  select pu.amount_gbp into v from purchases pu join momence_sales ms on ms.purchase_id = pu.id where ms.sale_key = 'T3';
+  select count(*) into n from momence_sales where sale_key = 'T3' and refund_seen_at is not null and refunded_gbp = 10;
+  if r = 'refund_seen' and v = 10 and n = 1 then passed := passed + 1;
+  else fails := fails || ' [12 refund: ' || r || ', amount ' || coalesce(v::text, '-') || ']'; end if;
+
+  -- 13. Mapping the new item, then retry: recorded under that product
+  update momence_items set action = 'sale', product_id = (select id from products where name = '5 Class Pass')
+    where category = 'membership' and item = 'TEST 5 Class Pass - Autorenew';
+  perform retry_momence_sales();
+  select status into s from momence_sales where sale_key = 'T4';
+  if s = 'recorded' then passed := passed + 1; else fails := fails || ' [13 mapped: ' || coalesce(s, '-') || ']'; end if;
+
+  -- 14. Purchases added: exactly T3, T6, T5, T4 (4)
+  select count(*) into n from purchases;
+  if n - n0 = 4 then passed := passed + 1; else fails := fails || ' [14 purchases added ' || (n - n0) || ', expected 4]'; end if;
+
+  -- 15. Live without a start date is refused
+  begin
+    update momence_import_settings set start_date = null where id = 1;
+    fails := fails || ' [15 live without start date was allowed]';
+  exception when check_violation then
+    passed := passed + 1;
+  end;
+
+  if fails = '' then
+    raise exception 'TEST PASSED: % of 15 checks. Everything has been undone (this error is on purpose).', passed;
+  else
+    raise exception 'TEST FAILED: % of 15 passed. Problems:%. Everything has been undone.', passed, fails;
+  end if;
+end $$;
+
+rollback;

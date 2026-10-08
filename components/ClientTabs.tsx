@@ -754,6 +754,12 @@ export default function ClientTabs({ personId, purchases, attendance, leads, pro
                   const isExpanded = expandedGroups.has(group.productName)
                   const visible = groupVisible.get(group.productName) ?? PAGE_SIZE
                   const rows = group.purchases.slice(0, visible)
+                  // Balance still owed on this product's orders (amount paid recorded and below the total)
+                  const outstanding = group.purchases.reduce((sum, gp) => {
+                    const total = Number(gp.amount_gbp ?? 0)
+                    const paid = gp.amount_paid_gbp
+                    return total > 0 && paid != null && paid < total ? sum + (total - paid) : sum
+                  }, 0)
 
                   return (
                     <div key={group.productName}>
@@ -763,7 +769,7 @@ export default function ClientTabs({ personId, purchases, attendance, leads, pro
                         className="w-full flex items-center justify-between px-3 py-2.5 text-left rounded-lg border border-card-border"
                         style={{ background: 'var(--color-grey-subtle)', cursor: 'pointer' }}
                       >
-                        <div className="flex items-center gap-2 min-w-0">
+                        <div className="flex items-center gap-2 min-w-0 flex-wrap">
                           {isExpanded
                             ? <ChevronDown size={14} className="shrink-0 text-muted" />
                             : <ChevronRight size={14} className="shrink-0 text-muted" />
@@ -772,6 +778,11 @@ export default function ClientTabs({ personId, purchases, attendance, leads, pro
                           <span className="text-xs text-muted shrink-0 whitespace-nowrap">
                             {group.purchases.length} purchase{group.purchases.length !== 1 ? 's' : ''}
                           </span>
+                          {outstanding > 0 && (
+                            <span className="text-xs font-semibold shrink-0 whitespace-nowrap" style={{ color: 'var(--color-red-vivid)' }}>
+                              Outstanding balance: {formatGBP(outstanding)}
+                            </span>
+                          )}
                         </div>
                         <span
                           className="font-semibold text-sm shrink-0 ml-3 whitespace-nowrap"

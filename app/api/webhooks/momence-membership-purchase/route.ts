@@ -3,6 +3,7 @@ import { validateWebhookSecret } from '@/lib/webhook-auth'
 import { findOrCreatePerson } from '@/lib/find-or-create-person'
 import { supabaseAdmin } from '@/lib/supabase-admin'
 import { MOMENCE_MEMBERSHIP_LOOKUP } from '@/lib/momence'
+import { momenceApiOwnsPurchases } from '@/lib/momencePeople'
 
 export async function POST(request: NextRequest) {
   const payload = await request.json()
@@ -81,6 +82,20 @@ export async function POST(request: NextRequest) {
   }
 
   const parsedDate = purchaseDate.split('T')[0]
+
+  // From the Momence import start date, the API import (lib/momenceSales.ts) owns Momence
+  // purchases. This old Zapier route then only logs, so nothing is counted twice.
+  if (await momenceApiOwnsPurchases(parsedDate)) {
+    await supabaseAdmin.from('webhook_log').insert({
+      source: 'momence',
+      event_type: 'membership_purchase',
+      payload,
+      status: 'skipped',
+      person_id: personId,
+      error_message: 'Momence API import owns purchases from its start date: not written by the Zapier route',
+    })
+    return NextResponse.json({ ok: true, note: 'Momence API import owns this purchase' })
+  }
   const expiresAt = membership.expiryDays
     ? new Date(new Date(parsedDate).getTime() + membership.expiryDays * 86400000)
         .toISOString()

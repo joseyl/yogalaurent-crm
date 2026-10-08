@@ -58,6 +58,9 @@ function isMomenceAllowed(method: string, path: string): boolean {
   if (method === 'GET' && path === '/host/sessions') return true
   if (method === 'GET' && /^\/host\/sessions\/\d+\/bookings$/.test(path)) return true
   if (method === 'GET' && /^\/host\/members\/\d+\/bought-memberships\/active$/.test(path)) return true
+  // Total Sales report: asking for a report and reading it back. Reading only, nothing is changed in Momence.
+  if (method === 'POST' && path === '/host/reports') return true
+  if (method === 'GET' && /^\/host\/reports\/[A-Za-z0-9_-]+$/.test(path)) return true
   return false
 }
 
@@ -65,6 +68,7 @@ async function momenceFetch(
   method: string,
   path: string,
   params: Record<string, string | number | boolean> = {},
+  jsonBody: unknown = null,
 ): Promise<unknown> {
   if (!isMomenceAllowed(method, path)) throw new Error(`Momence: blocked ${method} ${path}`)
 
@@ -93,6 +97,10 @@ async function momenceFetch(
     } else {
       await ensureMomenceToken()
       headers['Authorization'] = `Bearer ${_momenceToken}`
+      if (jsonBody !== null) {
+        headers['Content-Type'] = 'application/json'
+        body = JSON.stringify(jsonBody)
+      }
     }
 
     let res: Response
@@ -201,6 +209,93 @@ export async function getActivePasses(memberId: string): Promise<MomenceBoughtMe
     page++
   }
   return all
+}
+
+// ── Total Sales report ────────────────────────────────────────────────────────
+// One line per sale. Tested 2 to 8 Oct 2026 (claude/MOMENCE_API_TEST_RESULTS.md and
+// ~/yogalaurent-crm-data/momence/items-list.mjs). Momence allows 100 report runs a day.
+
+export interface MomenceSaleLine {
+  saleItemId?: number | null
+  paymentTransactionId?: number | null
+  paymentCategory?: string | null
+  paymentItem?: string | null
+  eventType?: string | null
+  paymentDate?: string | null
+  serviceDate?: string | null
+  paymentStatus?: string | null
+  paymentMethod?: string | null
+  paymentValue?: number | null
+  paidInMoneyCredits?: number | null
+  refunded?: number | null
+  currency?: string | null
+  memberId?: number | null
+  payingMemberId?: number | null
+  customerEmail?: string | null
+  customerName?: string | null
+  payingCustomerEmail?: string | null
+  payingCustomerName?: string | null
+  details?: {
+    sessionBookingId?: number | null
+    boughtMembershipId?: number | null
+    appointmentReservationId?: number | null
+  } | null
+}
+
+function reportRows(poll: unknown): MomenceSaleLine[] | null {
+  const p = poll as Record<string, unknown> | null
+  const data = p?.data as Record<string, unknown> | undefined
+  for (const c of [p?.payload, data?.payload, data?.rows, data?.items, p?.data, p?.rows, p?.result, p?.items]) {
+    if (Array.isArray(c)) return c as MomenceSaleLine[]
+  }
+  return null
+}
+
+/** Runs the Total Sales report for London dates from..to (inclusive) and returns every line. */
+export async function getTotalSales(from: string, to: string): Promise<MomenceSaleLine[]> {
+  const hostId = Number((process.env.MOMENCE_CLIENT_ID ?? '').match(/^api-(\d+)-/)?.[1])
+  if (!hostId) throw new Error('Momence: cannot read the host id from MOMENCE_CLIENT_ID')
+
+  const submitted = (await momenceFetch('POST', '/host/reports', {}, {
+    parameters: {
+      reportType: 'total-sales',
+      hostId,
+      dateRange: { from: `${from}T00:00:00.000Z`, to: `${to}T23:59:59.999Z` },
+    },
+  })) as Record<string, unknown> | null
+  const reportId = (submitted?.id ?? submitted?.reportId ?? (submitted?.data as Record<string, unknown> | undefined)?.id) as
+    | string
+    | number
+    | undefined
+  if (reportId == null) throw new Error('Momence: no report id returned')
+
+  for (let i = 0; i < 40; i++) {
+    await momenceSleep(3000)
+    const poll = (await momenceFetch('GET', `/host/reports/${reportId}`)) as Record<string, unknown> | null
+    const status = String(poll?.status ?? poll?.state ?? '').toLowerCase()
+    if (status === 'failed' || status === 'error') throw new Error(`Momence report ${reportId} failed`)
+    if (status !== 'completed' && status !== 'done' && status !== 'finished') continue
+
+    const rows = reportRows(poll) ?? []
+    const total = Number(
+      (poll?.pagination as Record<string, unknown> | undefined)?.totalCount ??
+        ((poll?.data as Record<string, unknown> | undefined)?.pagination as Record<string, unknown> | undefined)?.totalCount ??
+        NaN,
+    )
+    if (Number.isFinite(total) && rows.length > 0 && rows.length < total) {
+      const pageSize = rows.length
+      for (let page = 1; rows.length < total && page <= 50; page++) {
+        await momenceSleep(1000)
+        const next = await momenceFetch('GET', `/host/reports/${reportId}`, { page, pageSize })
+        const more = reportRows(next) ?? []
+        if (more.length === 0) break
+        rows.push(...more)
+      }
+      if (rows.length < total) throw new Error(`Momence report ${reportId}: read ${rows.length} of ${total} lines`)
+    }
+    return rows
+  }
+  throw new Error(`Momence report ${reportId} did not finish in 2 minutes`)
 }
 
 // ── Membership lookup (used by webhook handlers) ──────────────────────────────

@@ -22,10 +22,14 @@ export default function MomenceRefreshButton() {
       if (!res.ok) {
         setState({ kind: 'error', text: body.error ?? `Failed (${res.status})` })
       } else {
-        setState({
-          kind: 'done',
-          text: `Done: ${body.sessions_fetched ?? 0} classes, ${body.bookings_upserted ?? 0} bookings, ${body.passes_saved ?? 0} passes`,
-        })
+        let text = `Done: ${body.sessions_fetched ?? 0} classes, ${body.bookings_upserted ?? 0} bookings, ${body.passes_saved ?? 0} passes`
+        if (body.salesError) text += `. Sales import: ${body.salesError}`
+        else if (body.sales && body.sales.mode !== 'off') {
+          text += `. Sales: ${body.sales.lines_read ?? 0} lines read, ${body.sales.new_lines ?? 0} new`
+          if (body.sales.mode === 'live') text += `, ${body.sales.recorded ?? 0} recorded`
+          if (body.sales.to_sort) text += `, ${body.sales.to_sort} to sort`
+        }
+        setState({ kind: 'done', text })
       }
     } catch {
       setState({ kind: 'error', text: 'No answer from the server. Check the status line in a few minutes.' })
