@@ -6,6 +6,7 @@ import StatusBadge from '@/components/StatusBadge'
 import Card from '@/components/ui/Card'
 import { formatGBP } from '@/lib/utils'
 import RecordPaymentForm, { methodLabel, type RecordedPayment, type RecordPaymentResult } from '@/components/RecordPaymentForm'
+import CopyOrderRef from '@/components/CopyOrderRef'
 
 interface Product {
   id: string
@@ -36,7 +37,9 @@ interface Purchase {
  * Order line under a purchase: the order number for any order that has one (website,
  * WooCommerce), how it is being paid, what is paid and what is outstanding, a
  * "Record payment" button while money is owed, and the payment history: payments
- * recorded by hand (order_payments) merged with the Stripe plan instalments, by date.
+ * recorded by hand and Stripe balance payments (order_payments) merged with the Stripe
+ * plan instalments, by date. Stripe balance payments show their refund and have no Delete.
+ * The order number has a copy button (a TT number's trailing -N is not copied).
  */
 function PaymentLine({
   p,
@@ -67,7 +70,6 @@ function PaymentLine({
   const fmtDay = (iso: string) => new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Europe/London' })
   const londonDay = (iso: string) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/London', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(iso))
   const parts: string[] = []
-  if (p.order_ref) parts.push(`Order ${p.order_ref}`)
   if (p.payment_option === 'instalments') parts.push('Monthly payment plan')
   else if (p.payment_option === 'deposit') parts.push('Deposit and balance')
   if (total > 0) {
@@ -81,22 +83,40 @@ function PaymentLine({
     }
   }
 
-  // Payment history: hand-recorded payments and Stripe instalments, oldest first
+  // Payment history: payments (by hand or Stripe balance) and Stripe instalments, oldest first
   type HistoryRow =
-    | { kind: 'payment'; day: string; amount: number; id: string; method: string; note: string | null }
+    | { kind: 'payment'; day: string; amount: number; id: string; method: string; note: string | null; stripe: boolean; refunded: number }
     | { kind: 'instalment'; day: string; amount: number }
   const history: HistoryRow[] = [
-    ...payments.map(x => ({ kind: 'payment' as const, day: x.paid_on, amount: Number(x.amount_gbp), id: x.id, method: x.method, note: x.note })),
+    ...payments.map(x => ({
+      kind: 'payment' as const,
+      day: x.paid_on,
+      amount: Number(x.amount_gbp),
+      id: x.id,
+      method: x.method,
+      note: x.note,
+      stripe: x.source === 'stripe',
+      refunded: Number(x.refunded_gbp ?? 0),
+    })),
     ...instalments.map(i => ({ kind: 'instalment' as const, day: londonDay(i.paid_at), amount: Number(i.amount) })),
   ].sort((a, b) => (a.day < b.day ? -1 : a.day > b.day ? 1 : 0))
-  const listed = history.reduce((sum, h) => sum + h.amount, 0)
+  // A refund on a Stripe balance payment has already been taken off amount paid
+  const listed = history.reduce((sum, h) => sum + h.amount - (h.kind === 'payment' ? h.refunded : 0), 0)
   // What was paid before the history existed: at order time, or recorded before payments were kept
   const before = paid !== null && history.length > 0 ? Math.round((paid - listed) * 100) / 100 : 0
 
   return (
     <div className="px-3 pb-2.5 pt-1 border-b border-card-border text-xs">
       <div className="flex items-center gap-2 flex-wrap" style={{ paddingLeft: 98 }}>
-        <p className={owing ? 'text-heading font-medium' : 'text-muted'}>{parts.join(' · ')}</p>
+        {p.order_ref && (
+          <span className="flex items-center gap-1.5">
+            <span className={owing ? 'text-heading font-medium' : 'text-muted'}>Order {p.order_ref}</span>
+            <CopyOrderRef orderRef={p.order_ref} />
+          </span>
+        )}
+        {parts.length > 0 && (
+          <p className={owing ? 'text-heading font-medium' : 'text-muted'}>{p.order_ref ? '· ' : ''}{parts.join(' · ')}</p>
+        )}
         {canRecord && !recording && (
           <button onClick={onStartRecord} className="btn-secondary text-xs">Record payment</button>
         )}
@@ -107,10 +127,12 @@ function PaymentLine({
           {history.map((h, k) => (
             <li key={h.kind === 'payment' ? h.id : `i${k}`} className="flex items-center gap-2 flex-wrap">
               <span>
-                {fmtDay(h.day)} · {formatGBP(h.amount)} · {h.kind === 'instalment' ? 'instalment' : methodLabel(h.method).toLowerCase()}
+                {fmtDay(h.day)} · {formatGBP(h.amount)} · {h.kind === 'instalment' ? 'instalment' : h.method === 'bacs' ? 'Bacs' : methodLabel(h.method).toLowerCase()}
+                {h.kind === 'payment' && h.stripe ? ' · Stripe' : ''}
+                {h.kind === 'payment' && h.refunded > 0 ? ` · refunded ${formatGBP(h.refunded)}` : ''}
                 {h.kind === 'payment' && h.note ? ` · ${h.note}` : ''}
               </span>
-              {h.kind === 'payment' && (
+              {h.kind === 'payment' && !h.stripe && (
                 <button
                   onClick={() => onDeletePayment(h.id)}
                   disabled={deletingPaymentId === h.id}

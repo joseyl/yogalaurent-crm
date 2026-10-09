@@ -65,16 +65,17 @@ export default async function ClientDetailPage({ params }: Props) {
     instalmentsByPurchase.set(r.purchase_id as string, list)
   }
 
-  // Payments recorded by hand against this client's orders (table order_payments, migration 010)
+  // Payments against this client's orders (table order_payments): recorded by hand
+  // (migration 010) or Stripe balance payments (source stripe, migration 011)
   const { data: paymentRows } = purchaseIds.length
     ? await supabase
         .from('order_payments')
-        .select('id, purchase_id, amount_gbp, paid_on, method, note, created_at')
+        .select('id, purchase_id, amount_gbp, paid_on, method, note, created_at, source, refunded_gbp')
         .in('purchase_id', purchaseIds)
         .order('paid_on', { ascending: true })
         .order('created_at', { ascending: true })
-    : { data: [] as { id: string; purchase_id: string; amount_gbp: number; paid_on: string; method: string; note: string | null; created_at: string }[] }
-  const paymentsByPurchase = new Map<string, { id: string; amount_gbp: number; paid_on: string; method: string; note: string | null }[]>()
+    : { data: [] as { id: string; purchase_id: string; amount_gbp: number; paid_on: string; method: string; note: string | null; created_at: string; source: string; refunded_gbp: number }[] }
+  const paymentsByPurchase = new Map<string, { id: string; amount_gbp: number; paid_on: string; method: string; note: string | null; source: 'hand' | 'stripe'; refunded_gbp: number }[]>()
   for (const r of paymentRows ?? []) {
     const list = paymentsByPurchase.get(r.purchase_id as string) ?? []
     list.push({
@@ -83,6 +84,8 @@ export default async function ClientDetailPage({ params }: Props) {
       paid_on: r.paid_on as string,
       method: r.method as string,
       note: (r.note as string | null) ?? null,
+      source: r.source === 'stripe' ? 'stripe' : 'hand',
+      refunded_gbp: Number(r.refunded_gbp ?? 0),
     })
     paymentsByPurchase.set(r.purchase_id as string, list)
   }

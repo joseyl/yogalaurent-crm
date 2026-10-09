@@ -17,6 +17,7 @@ export const PAYMENT_METHODS = [
 ] as const
 
 export function methodLabel(method: string): string {
+  if (method === 'bacs') return 'Bacs'
   return PAYMENT_METHODS.find(m => m.value === method)?.label ?? method
 }
 
@@ -26,6 +27,10 @@ export interface RecordedPayment {
   paid_on: string
   method: string
   note: string | null
+  /** stripe: a Stripe balance payment (migration 011), never deleted from here */
+  source?: 'hand' | 'stripe'
+  /** Refunded on a Stripe balance payment, running total */
+  refunded_gbp?: number
 }
 
 export interface RecordPaymentResult {

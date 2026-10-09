@@ -5,6 +5,7 @@ import ExpiringPassesPanel from '@/components/ExpiringPassesPanel'
 import PassListsPanel from '@/components/PassListsPanel'
 import AwaitingPaymentPanel from '@/components/AwaitingPaymentPanel'
 import MomenceRefreshButton from '@/components/MomenceRefreshButton'
+import InvoiceDoneButton from '@/components/InvoiceDoneButton'
 import { formatGBP } from '@/lib/utils'
 import { fetchAll } from '@/lib/fetchAll'
 import PageHeader from '@/components/ui/PageHeader'
@@ -102,6 +103,10 @@ async function fetchDashboardData() {
     { data: momenceSettings, error: momenceSettingsError },
     { data: latestSalesRun, error: latestSalesRunError },
     { data: momenceAttentionRows, count: momenceAttentionCount, error: momenceAttentionError },
+    { data: balanceToMatchRows, count: balanceToMatchCount, error: balanceToMatchError },
+    { data: balanceInvoiceRows, count: balanceInvoiceCount, error: balanceInvoiceError },
+    { data: balanceRefundRows, error: balanceRefundError },
+    { data: latestBalance, error: latestBalanceError },
   ] = await Promise.all([
     supabase.from('people').select('*', { count: 'exact', head: true }).eq('status', 'client'),
     supabase.from('leads').select('*', { count: 'exact', head: true }).in('status', ['new', 'contacted', 'quoted']),
@@ -140,6 +145,16 @@ async function fetchDashboardData() {
     supabase.from('momence_sales').select('id, payment_date, item, money_gbp, status, refund_seen_at, refunded_gbp, missing_since, note', { count: 'exact' })
       .or('status.eq.to_sort,and(checked_at.is.null,refund_seen_at.not.is.null),and(checked_at.is.null,missing_since.not.is.null)')
       .order('payment_date', { ascending: false }).limit(50),
+    // Stripe balance payments (supabase/migrations/011_balance_payments.sql): payments to
+    // match, invoices to raise (until Done), refunds waiting or unmatched, last received
+    supabase.from('balance_payments').select('id, paid_at, amount_gbp, order_ref, method, programme, note', { count: 'exact' })
+      .eq('status', 'to_match').order('paid_at', { ascending: false }).limit(50),
+    supabase.from('balance_payments')
+      .select('id, paid_at, amount_gbp, order_ref, matched_order_ref, method, status, overpaid_gbp, email_differs, refunded_gbp, purchases(person_id, people(first_name, last_name))', { count: 'exact' })
+      .is('invoice_raised_at', null).order('paid_at', { ascending: true }).limit(100),
+    supabase.from('balance_refunds').select('id, refunded_at, refunded_gbp, order_ref, status, note')
+      .in('status', ['waiting', 'unmatched']).order('refunded_at', { ascending: false }).limit(50),
+    supabase.from('balance_payments').select('paid_at, amount_gbp').order('paid_at', { ascending: false }).limit(1).maybeSingle(),
   ])
 
   // Summary
@@ -287,6 +302,38 @@ async function fetchDashboardData() {
       count: momenceAttentionCount ?? 0,
       rows: (momenceAttentionRows ?? []) as { id: string; payment_date: string; item: string; money_gbp: number | string; status: string; refund_seen_at: string | null; refunded_gbp: number | string; missing_since: string | null; note: string | null }[],
     },
+    // ok is false if the check could not be read, so the page never shows a false "nothing to match"
+    balanceCheck: (() => {
+      type InvoiceRow = {
+        id: string; paid_at: string; amount_gbp: number | string; order_ref: string; matched_order_ref: string | null
+        method: string; status: string; overpaid_gbp: number | string | null; email_differs: boolean; refunded_gbp: number | string
+        purchases: { person_id: string; people: { first_name: string | null; last_name: string | null } | null } | null
+      }
+      const refunds = (balanceRefundRows ?? []) as { id: string; refunded_at: string | null; refunded_gbp: number | string; order_ref: string | null; status: string; note: string | null }[]
+      return {
+        ok: !balanceToMatchError && balanceToMatchCount !== null && !balanceInvoiceError && balanceInvoiceCount !== null
+          && !balanceRefundError && !latestBalanceError,
+        toMatchCount: balanceToMatchCount ?? 0,
+        toMatchRows: (balanceToMatchRows ?? []) as { id: string; paid_at: string; amount_gbp: number | string; order_ref: string; method: string; programme: string | null; note: string | null }[],
+        invoiceCount: balanceInvoiceCount ?? 0,
+        invoiceRows: ((balanceInvoiceRows ?? []) as unknown as InvoiceRow[]).map(r => ({
+          id: r.id,
+          paidAt: r.paid_at,
+          amount: Number(r.amount_gbp),
+          orderRef: r.matched_order_ref ?? r.order_ref,
+          method: r.method,
+          matched: r.status === 'matched',
+          overpaid: r.overpaid_gbp == null ? null : Number(r.overpaid_gbp),
+          emailDiffers: r.email_differs,
+          refunded: Number(r.refunded_gbp ?? 0),
+          personId: r.purchases?.person_id ?? null,
+          name: [r.purchases?.people?.first_name, r.purchases?.people?.last_name].filter(Boolean).join(' ') || null,
+        })),
+        unmatchedRefunds: refunds.filter(r => r.status === 'unmatched'),
+        waitingRefunds: refunds.filter(r => r.status === 'waiting'),
+        last: latestBalance as { paid_at: string; amount_gbp: number | string } | null,
+      }
+    })(),
     // ok is false if the check could not be read, so the page never hides a problem
     futureCheck: {
       ok: !futureError && futureCount !== null,
@@ -298,7 +345,7 @@ async function fetchDashboardData() {
 }
 
 export default async function DashboardPage() {
-  const { summary, staleLeads, goneQuiet, categoryRevenue, trend, latestSync, latestSyncUnavailable, webhookCheck, unmatchedCheck, paymentLinkCheck, momenceSalesCheck, futureCheck } = await fetchDashboardData()
+  const { summary, staleLeads, goneQuiet, categoryRevenue, trend, latestSync, latestSyncUnavailable, webhookCheck, unmatchedCheck, paymentLinkCheck, momenceSalesCheck, balanceCheck, futureCheck } = await fetchDashboardData()
 
   const dotColor = latestSyncUnavailable
     ? 'var(--color-amber-vivid)'
@@ -688,6 +735,110 @@ export default async function DashboardPage() {
                           {r.status === 'applied' && r.kept_gbp !== null && <> (kept {formatGBP(Number(r.kept_gbp))})</>}
                         </li>
                       ))}
+                    </ul>
+                  </Collapsible>
+                </div>
+              )}
+            </>
+          )
+        })()}
+
+        {/* Stripe balance payments: status, payments to match, invoices to raise (until Done) */}
+        {(() => {
+          const b = balanceCheck
+          const toMatch = b.toMatchCount + b.unmatchedRefunds.length
+          const methodText = (m: string) => (m === 'bacs' ? 'Bacs' : 'card')
+          return (
+            <>
+              <div className="card flex items-center gap-3 p-4 mb-6">
+                <span
+                  className="w-2.5 h-2.5 flex-shrink-0 rounded-full"
+                  style={{
+                    background: !b.ok
+                      ? 'var(--color-amber-vivid)'
+                      : toMatch > 0
+                      ? 'var(--color-red-vivid)'
+                      : b.invoiceCount > 0
+                      ? 'var(--color-amber-vivid)'
+                      : b.last
+                      ? 'var(--color-green-vivid)'
+                      : 'var(--color-muted)',
+                  }}
+                />
+                <p className="text-sm text-body">
+                  {!b.ok
+                    ? 'Balance payments check unavailable'
+                    : <>
+                        Balance payments:{' '}
+                        {b.last ? `last received ${formatUKDateTime(b.last.paid_at)}, ${formatGBP(Number(b.last.amount_gbp))}` : 'none received yet'}
+                        {toMatch > 0 ? `. To match: ${toMatch}` : '. Nothing to match'}
+                        {b.invoiceCount > 0 && `. Invoices to raise: ${b.invoiceCount}`}
+                      </>}
+                </p>
+              </div>
+
+              {b.ok && toMatch > 0 && (
+                <div className="mb-6">
+                  <Collapsible title="Payments to match" count={toMatch} tone="danger">
+                    <ul className="space-y-2 px-4 pb-4 text-sm text-body md:px-5">
+                      {b.toMatchRows.map(r => (
+                        <li key={r.id}>
+                          {formatUKDateTime(r.paid_at)}, {formatGBP(Number(r.amount_gbp))}, {methodText(r.method)}, order {r.order_ref}
+                          {r.programme && <>, {r.programme}</>}
+                          {r.note && <span className="block text-xs text-muted">{r.note}</span>}
+                        </li>
+                      ))}
+                      {b.toMatchCount > b.toMatchRows.length && (
+                        <li className="text-xs text-muted">Showing latest {b.toMatchRows.length} payments</li>
+                      )}
+                      {b.unmatchedRefunds.map(r => (
+                        <li key={r.id}>
+                          Refund {formatUKDateTime(r.refunded_at)}, {formatGBP(Number(r.refunded_gbp))} in total{r.order_ref && <>, order {r.order_ref}</>}
+                          {r.note && <span className="block text-xs text-muted">{r.note}</span>}
+                        </li>
+                      ))}
+                      {b.waitingRefunds.length > 0 && (
+                        <li className="text-xs text-muted">
+                          {b.waitingRefunds.length === 1 ? '1 refund is' : `${b.waitingRefunds.length} refunds are`} waiting for its payment to be matched; applied when it is.
+                        </li>
+                      )}
+                    </ul>
+                  </Collapsible>
+                </div>
+              )}
+
+              {b.ok && b.invoiceCount > 0 && (
+                <div className="mb-6">
+                  <Collapsible title="Invoice to raise" count={b.invoiceCount} tone="warning">
+                    <ul className="space-y-2 px-4 pb-4 text-sm text-body md:px-5">
+                      {b.invoiceRows.map(r => (
+                        <li key={r.id} className="flex flex-wrap items-center justify-between gap-2 border-b border-card-border pb-2 last:border-0">
+                          <span>
+                            {r.personId && r.name ? (
+                              <Link href={`/clients/${r.personId}`} className="font-medium text-heading underline">{r.name}</Link>
+                            ) : (
+                              <span className="font-medium text-heading">Not matched yet</span>
+                            )}
+                            <span className="block text-xs text-muted">
+                              {formatUKDateTime(r.paidAt)}, {formatGBP(r.amount)}, {methodText(r.method)}, order {r.orderRef}
+                              {r.refunded > 0 && <>, refunded {formatGBP(r.refunded)}</>}
+                            </span>
+                            {(r.overpaid !== null || r.emailDiffers || !r.matched) && (
+                              <span className="block text-xs" style={{ color: 'var(--color-red-vivid)' }}>
+                                {[
+                                  !r.matched ? 'payment to match' : null,
+                                  r.overpaid !== null ? `overpaid by ${formatGBP(r.overpaid)}` : null,
+                                  r.emailDiffers ? 'email differs from the client record' : null,
+                                ].filter(Boolean).join(', ')}
+                              </span>
+                            )}
+                          </span>
+                          <InvoiceDoneButton paymentId={r.id} />
+                        </li>
+                      ))}
+                      {b.invoiceCount > b.invoiceRows.length && (
+                        <li className="text-xs text-muted">Showing the oldest {b.invoiceRows.length}</li>
+                      )}
                     </ul>
                   </Collapsible>
                 </div>

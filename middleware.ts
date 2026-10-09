@@ -8,6 +8,8 @@ const isPublicRoute = createRouteMatcher([
   "/api/webhooks/training-instalment",
   "/api/webhooks/payment-link-sale",
   "/api/webhooks/payment-link-refund",
+  "/api/webhooks/balance-payment",
+  "/api/webhooks/balance-refund",
   "/api/cron/momence-sync",
   "/api/cron/momence-sales",
 ]);
