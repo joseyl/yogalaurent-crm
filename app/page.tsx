@@ -490,6 +490,80 @@ export default async function DashboardPage() {
         <ExpiringPassesPanel />
         <PassListsPanel />
         <AwaitingPaymentPanel />
+
+        {/* Stripe balance payments to act on (status line at the bottom of the page) */}
+        {(() => {
+          const b = balanceCheck
+          const toMatch = b.toMatchCount + b.unmatchedRefunds.length
+          const methodText = (m: string) => (m === 'bacs' ? 'Bacs' : 'card')
+          return (
+            <>
+              {b.ok && toMatch > 0 && (
+                  <Collapsible title="Payments to match" count={toMatch} tone="danger">
+                    <ul className="space-y-2 px-4 pb-4 text-sm text-body md:px-5">
+                      {b.toMatchRows.map(r => (
+                        <li key={r.id}>
+                          {formatUKDateTime(r.paid_at)}, {formatGBP(Number(r.amount_gbp))}, {methodText(r.method)}, order {r.order_ref}
+                          {r.programme && <>, {r.programme}</>}
+                          {r.note && <span className="block text-xs text-muted">{r.note}</span>}
+                        </li>
+                      ))}
+                      {b.toMatchCount > b.toMatchRows.length && (
+                        <li className="text-xs text-muted">Showing latest {b.toMatchRows.length} payments</li>
+                      )}
+                      {b.unmatchedRefunds.map(r => (
+                        <li key={r.id}>
+                          Refund {formatUKDateTime(r.refunded_at)}, {formatGBP(Number(r.refunded_gbp))} in total{r.order_ref && <>, order {r.order_ref}</>}
+                          {r.note && <span className="block text-xs text-muted">{r.note}</span>}
+                        </li>
+                      ))}
+                      {b.waitingRefunds.length > 0 && (
+                        <li className="text-xs text-muted">
+                          {b.waitingRefunds.length === 1 ? '1 refund is' : `${b.waitingRefunds.length} refunds are`} waiting for its payment to be matched; applied when it is.
+                        </li>
+                      )}
+                    </ul>
+                  </Collapsible>
+              )}
+
+              {b.ok && (
+                  <Collapsible title="Invoice to raise" count={b.invoiceCount} tone={b.invoiceCount > 0 ? 'warning' : 'neutral'}>
+                    {b.invoiceCount === 0 && <p className="px-4 pb-4 text-sm text-muted md:px-5">Nothing to invoice.</p>}
+                    <ul className={`space-y-2 px-4 pb-4 text-sm text-body md:px-5${b.invoiceCount === 0 ? ' hidden' : ''}`}>
+                      {b.invoiceRows.map(r => (
+                        <li key={r.id} className="flex flex-wrap items-center justify-between gap-2 border-b border-card-border pb-2 last:border-0">
+                          <span>
+                            {r.personId && r.name ? (
+                              <Link href={`/clients/${r.personId}`} className="font-medium text-heading underline">{r.name}</Link>
+                            ) : (
+                              <span className="font-medium text-heading">Not matched yet</span>
+                            )}
+                            <span className="block text-xs text-muted">
+                              {formatUKDateTime(r.paidAt)}, {formatGBP(r.amount)}, {methodText(r.method)}, order {r.orderRef}
+                              {r.refunded > 0 && <>, refunded {formatGBP(r.refunded)}</>}
+                            </span>
+                            {(r.overpaid !== null || r.emailDiffers || !r.matched) && (
+                              <span className="block text-xs" style={{ color: 'var(--color-red-vivid)' }}>
+                                {[
+                                  !r.matched ? 'payment to match' : null,
+                                  r.overpaid !== null ? `overpaid by ${formatGBP(r.overpaid)}` : null,
+                                  r.emailDiffers ? 'email differs from the client record' : null,
+                                ].filter(Boolean).join(', ')}
+                              </span>
+                            )}
+                          </span>
+                          <InvoiceDoneButton paymentId={r.id} />
+                        </li>
+                      ))}
+                      {b.invoiceCount > b.invoiceRows.length && (
+                        <li className="text-xs text-muted">Showing the oldest {b.invoiceRows.length}</li>
+                      )}
+                    </ul>
+                  </Collapsible>
+              )}
+            </>
+          )
+        })()}
       </div>
 
       {/* Charts */}
@@ -743,11 +817,10 @@ export default async function DashboardPage() {
           )
         })()}
 
-        {/* Stripe balance payments: status, payments to match, invoices to raise (until Done) */}
+        {/* Stripe balance payments status (the lists are with the action panels above) */}
         {(() => {
           const b = balanceCheck
           const toMatch = b.toMatchCount + b.unmatchedRefunds.length
-          const methodText = (m: string) => (m === 'bacs' ? 'Bacs' : 'card')
           return (
             <>
               <div className="card flex items-center gap-3 p-4 mb-6">
@@ -777,72 +850,6 @@ export default async function DashboardPage() {
                 </p>
               </div>
 
-              {b.ok && toMatch > 0 && (
-                <div className="mb-6">
-                  <Collapsible title="Payments to match" count={toMatch} tone="danger">
-                    <ul className="space-y-2 px-4 pb-4 text-sm text-body md:px-5">
-                      {b.toMatchRows.map(r => (
-                        <li key={r.id}>
-                          {formatUKDateTime(r.paid_at)}, {formatGBP(Number(r.amount_gbp))}, {methodText(r.method)}, order {r.order_ref}
-                          {r.programme && <>, {r.programme}</>}
-                          {r.note && <span className="block text-xs text-muted">{r.note}</span>}
-                        </li>
-                      ))}
-                      {b.toMatchCount > b.toMatchRows.length && (
-                        <li className="text-xs text-muted">Showing latest {b.toMatchRows.length} payments</li>
-                      )}
-                      {b.unmatchedRefunds.map(r => (
-                        <li key={r.id}>
-                          Refund {formatUKDateTime(r.refunded_at)}, {formatGBP(Number(r.refunded_gbp))} in total{r.order_ref && <>, order {r.order_ref}</>}
-                          {r.note && <span className="block text-xs text-muted">{r.note}</span>}
-                        </li>
-                      ))}
-                      {b.waitingRefunds.length > 0 && (
-                        <li className="text-xs text-muted">
-                          {b.waitingRefunds.length === 1 ? '1 refund is' : `${b.waitingRefunds.length} refunds are`} waiting for its payment to be matched; applied when it is.
-                        </li>
-                      )}
-                    </ul>
-                  </Collapsible>
-                </div>
-              )}
-
-              {b.ok && b.invoiceCount > 0 && (
-                <div className="mb-6">
-                  <Collapsible title="Invoice to raise" count={b.invoiceCount} tone="warning">
-                    <ul className="space-y-2 px-4 pb-4 text-sm text-body md:px-5">
-                      {b.invoiceRows.map(r => (
-                        <li key={r.id} className="flex flex-wrap items-center justify-between gap-2 border-b border-card-border pb-2 last:border-0">
-                          <span>
-                            {r.personId && r.name ? (
-                              <Link href={`/clients/${r.personId}`} className="font-medium text-heading underline">{r.name}</Link>
-                            ) : (
-                              <span className="font-medium text-heading">Not matched yet</span>
-                            )}
-                            <span className="block text-xs text-muted">
-                              {formatUKDateTime(r.paidAt)}, {formatGBP(r.amount)}, {methodText(r.method)}, order {r.orderRef}
-                              {r.refunded > 0 && <>, refunded {formatGBP(r.refunded)}</>}
-                            </span>
-                            {(r.overpaid !== null || r.emailDiffers || !r.matched) && (
-                              <span className="block text-xs" style={{ color: 'var(--color-red-vivid)' }}>
-                                {[
-                                  !r.matched ? 'payment to match' : null,
-                                  r.overpaid !== null ? `overpaid by ${formatGBP(r.overpaid)}` : null,
-                                  r.emailDiffers ? 'email differs from the client record' : null,
-                                ].filter(Boolean).join(', ')}
-                              </span>
-                            )}
-                          </span>
-                          <InvoiceDoneButton paymentId={r.id} />
-                        </li>
-                      ))}
-                      {b.invoiceCount > b.invoiceRows.length && (
-                        <li className="text-xs text-muted">Showing the oldest {b.invoiceRows.length}</li>
-                      )}
-                    </ul>
-                  </Collapsible>
-                </div>
-              )}
             </>
           )
         })()}
