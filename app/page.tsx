@@ -111,7 +111,11 @@ async function fetchDashboardData() {
     supabase.from('leads').select('*', { count: 'exact', head: true }).in('status', ['new', 'contacted', 'quoted']),
     supabase.from('purchases').select('amount_gbp, products(entity)').gte('purchase_date', firstOfMonth).lte('purchase_date', today),
     supabase.from('purchases').select('amount_gbp, products(entity)').gte('purchase_date', firstOfYear).lte('purchase_date', today),
-    supabase.from('leads').select('id, last_followup_date, date_added, assigned_to, people(first_name, last_name)').in('status', ['new', 'contacted', 'quoted']),
+    // Open leads and clients are paged (fetchAll), so the Stale Leads and Gone Quiet
+    // totals are never cut off at Supabase's 1,000-row cap.
+    fetchAll<{ id: string; last_followup_date: string | null; date_added: string; assigned_to: string | null; people: unknown }>(
+      () => supabase.from('leads').select('id, last_followup_date, date_added, assigned_to, people(first_name, last_name)').in('status', ['new', 'contacted', 'quoted']).order('id')
+    ).then(data => ({ data })),
     fetchAll<{ person_id: string; class_date: string }>(
       () => supabase
         .from('attendance_v2')
@@ -121,7 +125,9 @@ async function fetchDashboardData() {
         .eq('duplicate_of_momence', false)
         .not('person_id', 'is', null)
     ),
-    supabase.from('people').select('id, first_name, last_name').eq('status', 'client'),
+    fetchAll<{ id: string; first_name: string | null; last_name: string | null }>(
+      () => supabase.from('people').select('id, first_name, last_name').eq('status', 'client').order('id')
+    ).then(data => ({ data })),
     supabase.from('purchases').select('amount_gbp, products(category)').gte('purchase_date', firstOfMonth).lte('purchase_date', today),
     // New Clients line: each client dated by first purchase, else first class, else load date
     // (view client_first_activity, supabase/migrations/005_client_first_activity.sql)
@@ -178,8 +184,8 @@ async function fetchDashboardData() {
     else if (prod?.entity === 'Terra Training Ltd') revenueThisYearTTL += amt
   }
 
-  // Stale leads
-  const staleLeads = (openLeadsData ?? [])
+  // Stale leads (the card shows the true total; the list stops at 20)
+  const staleLeadsAll = (openLeadsData ?? [])
     .filter(lead => {
       if (!lead.last_followup_date) return lead.date_added <= sevenDaysAgo
       return lead.last_followup_date <= sevenDaysAgo
@@ -190,7 +196,8 @@ async function fetchDashboardData() {
       if (!b.last_followup_date) return 1
       return a.last_followup_date.localeCompare(b.last_followup_date)
     })
-    .slice(0, 20)
+  const staleLeads = staleLeadsAll.slice(0, 20)
+  const staleLeadsTotal = staleLeadsAll.length
 
   // Gone quiet
   const byPerson: Record<string, { recent: number; older: number }> = {}
@@ -202,13 +209,15 @@ async function fetchDashboardData() {
       byPerson[a.person_id].older++
     }
   }
-  const goneQuiet = (clients ?? [])
+  // Gone quiet (the card shows the true total; the list stops at 20)
+  const goneQuietAll = (clients ?? [])
     .filter(c => {
       const att = byPerson[c.id]
       return att && att.older > 0 && att.recent < 2
     })
     .sort((a, b) => (a.last_name ?? '').localeCompare(b.last_name ?? ''))
-    .slice(0, 20)
+  const goneQuiet = goneQuietAll.slice(0, 20)
+  const goneQuietTotal = goneQuietAll.length
 
   // Category revenue chart
   const categoryMap: Record<string, number> = {}
@@ -261,7 +270,9 @@ async function fetchDashboardData() {
   return {
     summary: { activeClients: activeClients ?? 0, openLeads: openLeads ?? 0, revenueThisMonth, revenueThisMonthLR, revenueThisMonthTTL, revenueThisYear, revenueThisYearLR, revenueThisYearTTL },
     staleLeads,
+    staleLeadsTotal,
     goneQuiet,
+    goneQuietTotal,
     categoryRevenue,
     trend,
     latestSync: latestSync as { status: string; finished_at: string | null; error: string | null; started_at: string } | null,
@@ -344,7 +355,7 @@ async function fetchDashboardData() {
 }
 
 export default async function DashboardPage() {
-  const { summary, staleLeads, goneQuiet, categoryRevenue, trend, latestSync, latestSyncUnavailable, webhookCheck, unmatchedCheck, paymentLinkCheck, momenceSalesCheck, balanceCheck, futureCheck } = await fetchDashboardData()
+  const { summary, staleLeads, staleLeadsTotal, goneQuiet, goneQuietTotal, categoryRevenue, trend, latestSync, latestSyncUnavailable, webhookCheck, unmatchedCheck, paymentLinkCheck, momenceSalesCheck, balanceCheck, futureCheck } = await fetchDashboardData()
 
   const dotColor = latestSyncUnavailable
     ? 'var(--color-amber-vivid)'
@@ -439,17 +450,21 @@ export default async function DashboardPage() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
         {/* Pairs, left then right (stacked in the same order on a phone):
             Class Passes: Renewal due | Expired with credits (decide);
+            Intro Offers: Next step | Intro Offers: Bought, never used;
             Online Classes: Gone Quiet | Stale Leads;
             Payments to Confirm | Invoice to raise.
-            Every card always shows, so the pairs never shift. ClassPassCards renders two cards.
+            Every card always shows, so the pairs never shift. ClassPassCards renders the first two pairs (four cards).
             Payments to match is an exception: full width, only when something needs matching. */}
         <ClassPassCards />
 
         <Collapsible
           title="Online Classes: Gone Quiet"
-          count={goneQuiet.length}
-          tone={goneQuiet.length > 0 ? 'warning' : 'neutral'}
+          count={goneQuietTotal}
+          tone={goneQuietTotal > 0 ? 'warning' : 'neutral'}
         >
+          {goneQuietTotal > goneQuiet.length && (
+            <p className="text-xs text-muted mb-3">Showing the first {goneQuiet.length} of {goneQuietTotal}, by surname.</p>
+          )}
           {goneQuiet.length === 0 ? (
             <p className="text-sm text-muted">Nothing to action.</p>
           ) : (
@@ -469,9 +484,12 @@ export default async function DashboardPage() {
 
         <Collapsible
           title="Stale Leads"
-          count={staleLeads.length}
-          tone={staleLeads.length > 0 ? 'warning' : 'neutral'}
+          count={staleLeadsTotal}
+          tone={staleLeadsTotal > 0 ? 'warning' : 'neutral'}
         >
+          {staleLeadsTotal > staleLeads.length && (
+            <p className="text-xs text-muted mb-3">Showing the {staleLeads.length} longest without a follow-up, of {staleLeadsTotal}.</p>
+          )}
           {staleLeads.length === 0 ? (
             <p className="text-sm text-muted">Nothing to action.</p>
           ) : (

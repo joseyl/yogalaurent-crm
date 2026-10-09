@@ -10,6 +10,7 @@ import {
   num,
   isRenewed,
   passHolderNames,
+  isIntroOffer,
   PASS_SNAPSHOT_COLUMNS,
   type PassSnapshotRow,
 } from '@/lib/passRenewals'
@@ -29,6 +30,20 @@ export const dynamic = 'force-dynamic'
 //   expiredWithCredits (action: extension decision):
 //     ended in the last 60 days with credits left above 0
 //
+// Introductory Offers (pass name contains "Introductory Offer") never go on
+// these two cards. They have their own pair (Build A, 9 Oct 2026):
+//   introNextStep: Intro Offers that ended in the last 30 days, hidden by the
+//     same two-part renewal rule as the pass cards (another Intro Offer in
+//     Momence does not count as a newer pass).
+//   introNeverUsed: Intro Offers bought but never started. A Momence pass only
+//     gets a start and end date on its first booked class, and the nightly copy
+//     only fetches passes for people who booked a class in the last 120 days, so
+//     most of these never reach the copy. Two sources, once per person:
+//       - CRM purchase of "Introductory Offer" in the last 60 days, with no class
+//         booked (attendance_v2, not cancelled) on or after the purchase date and
+//         no class pass bought since (same day or later);
+//       - an Intro Offer in the latest copy with no start date and no newer pass.
+//
 // "Ended" means the London end date is before today (a pass ending today still
 // counts as ending). Both cards hide a pass as renewed when EITHER:
 //   - the person has bought another class pass (not a drop-in) since the pass
@@ -42,8 +57,11 @@ const DAYS_AHEAD = 15
 const LAPSED_DAYS_BACK = 30
 const EXPIRED_DAYS_BACK = 60
 const LOW_CREDITS = 1.5
+const INTRO_ENDED_DAYS_BACK = 30
+const INTRO_BOUGHT_DAYS_BACK = 60
 
 export type RenewalReason = 'ending' | 'low' | 'ending_low' | 'lapsed'
+export type IntroReason = 'intro_ended' | 'intro_never_used'
 
 export interface ClassPassCardRow {
   passId: string
@@ -54,8 +72,10 @@ export interface ClassPassCardRow {
   hasCreditLimit: boolean
   endDate: string | null
   daysLeft: number | null
-  reason: RenewalReason | 'expired'
+  reason: RenewalReason | 'expired' | IntroReason
   lastKnown: boolean
+  // Intro Offers bought but never used: the CRM purchase date, if known
+  boughtDate: string | null
 }
 
 export async function GET() {
@@ -73,7 +93,14 @@ export async function GET() {
       .maybeSingle()
     if (latestErr) throw latestErr
     if (!latest) {
-      return NextResponse.json({ snapshotDate: null, renewalDue: [], expiredWithCredits: [], hiddenAsRenewed: null })
+      return NextResponse.json({
+        snapshotDate: null,
+        renewalDue: [],
+        expiredWithCredits: [],
+        introNextStep: [],
+        introNeverUsed: [],
+        hiddenAsRenewed: null,
+      })
     }
     const latestDate = latest.snapshot_date as string
 
@@ -130,25 +157,41 @@ export async function GET() {
       list.push(r)
       latestByMember.set(r.momence_member_id, list)
     }
+    // For an Intro Offer, another Intro Offer is not a newer pass.
     function renewedInMomence(pass: PassSnapshotRow): boolean {
       if (!pass.momence_member_id) return false
       const start = toLondonDate(pass.start_date)
+      const intro = isIntroOffer(pass.name)
       return (latestByMember.get(pass.momence_member_id) ?? []).some(other => {
         if (other.momence_bought_membership_id === pass.momence_bought_membership_id) return false
+        if (intro && isIntroOffer(other.name)) return false
         const otherStart = toLondonDate(other.start_date)
         if (otherStart === null) return true // bought ahead, not started yet
         return start !== null && otherStart > start
       })
     }
 
-    type Candidate = { row: PassSnapshotRow; reason: RenewalReason | 'expired' }
+    type Candidate = { row: PassSnapshotRow; reason: RenewalReason | 'expired' | IntroReason; boughtDate?: string | null }
     const renewalCandidates: Candidate[] = []
     const expiredCandidates: Candidate[] = []
+    const introEndedCandidates: Candidate[] = []
+    const introUnstartedInCopy: Candidate[] = []
+    const introEndedCutoff = addDays(today, -INTRO_ENDED_DAYS_BACK)
 
     for (const r of lastKnown.values()) {
       const hasLimit = num(r.credits_total) !== null
       const left = num(r.credits_left)
       const end = toLondonDate(r.end_date)
+
+      // Intro Offers: their own cards only
+      if (isIntroOffer(r.name)) {
+        if (end !== null && end < today) {
+          if (end >= introEndedCutoff) introEndedCandidates.push({ row: r, reason: 'intro_ended' })
+        } else if (toLondonDate(r.start_date) === null && r.snapshot_date === latestDate) {
+          introUnstartedInCopy.push({ row: r, reason: 'intro_never_used' })
+        }
+        continue
+      }
       // Ended: London end date before today
       if (end !== null && end < today) {
         if (end < expiredCutoff) continue
@@ -168,17 +211,109 @@ export async function GET() {
       else if (low) renewalCandidates.push({ row: r, reason: 'low' })
     }
 
-    const all = [...renewalCandidates, ...expiredCandidates]
-    const purchases = await getClassPassPurchases(
-      all.map(c => c.row.person_id).filter((id): id is string => !!id),
+    // Intro Offers bought in the CRM in the last INTRO_BOUGHT_DAYS_BACK days
+    const introBoughtCutoff = addDays(today, -INTRO_BOUGHT_DAYS_BACK)
+    const introBuysRaw = await fetchAll<{
+      id: string
+      person_id: string | null
+      purchase_date: string
+      products: { name: string | null } | null
+    }>(() =>
+      supabaseAdmin
+        .from('purchases')
+        .select('id, person_id, purchase_date, products!inner(name)')
+        .ilike('products.name', '%introductory offer%')
+        .gte('purchase_date', introBoughtCutoff)
+        .lte('purchase_date', today)
+        .order('id'),
     )
+    const introBuys = introBuysRaw.filter(b => !!b.person_id && isIntroOffer(b.products?.name))
+
+    const all = [...renewalCandidates, ...expiredCandidates, ...introEndedCandidates, ...introUnstartedInCopy]
+    const purchases = await getClassPassPurchases([
+      ...all.map(c => c.row.person_id).filter((id): id is string => !!id),
+      ...introBuys.map(b => b.person_id as string),
+    ])
     const renewed = (c: Candidate) => isRenewed(c.row, purchases) || renewedInMomence(c.row)
     const renewalKept = renewalCandidates.filter(c => !renewed(c))
     const expiredKept = expiredCandidates.filter(c => !renewed(c))
+    const introEndedKept = introEndedCandidates.filter(c => !renewed(c))
 
-    const nameOf = await passHolderNames([...renewalKept, ...expiredKept].map(c => c.row))
+    // Bought, never used. CRM source first: no class booked on or after the
+    // purchase date, and no class pass bought since.
+    const introBuyerIds = [...new Set(introBuys.map(b => b.person_id as string))]
+    const attendedSince = new Map<string, string>() // person -> latest class date
+    if (introBuyerIds.length > 0) {
+      const att = await fetchAll<{ person_id: string; class_date: string }>(() =>
+        supabaseAdmin
+          .from('attendance_v2')
+          .select('person_id, class_date')
+          .in('person_id', introBuyerIds)
+          .eq('cancelled', false)
+          .gte('class_date', introBoughtCutoff)
+          .order('class_date'),
+      )
+      for (const a of att) {
+        const prev = attendedSince.get(a.person_id)
+        if (!prev || a.class_date > prev) attendedSince.set(a.person_id, a.class_date)
+      }
+    }
+    // Latest Intro Offer purchase per person
+    const latestIntroBuy = new Map<string, (typeof introBuys)[number]>()
+    for (const b of introBuys) {
+      const prev = latestIntroBuy.get(b.person_id as string)
+      if (!prev || b.purchase_date > prev.purchase_date) latestIntroBuy.set(b.person_id as string, b)
+    }
+    // People with an Intro Offer in the latest copy that has started (used)
+    const introStartedInCopy = new Set(
+      latestRows
+        .filter(r => isIntroOffer(r.name) && r.person_id && toLondonDate(r.start_date) !== null)
+        .map(r => r.person_id as string),
+    )
+    const neverUsed: Candidate[] = []
+    const neverUsedPeople = new Set<string>()
+    let hiddenNeverUsed = 0
+    for (const [personId, b] of latestIntroBuy) {
+      const lastClass = attendedSince.get(personId)
+      const used = lastClass !== undefined && lastClass >= b.purchase_date
+      const boughtPass = purchases.some(p => p.person_id === personId && p.purchase_date >= b.purchase_date)
+      if (used || boughtPass || introStartedInCopy.has(personId)) {
+        hiddenNeverUsed++
+        continue
+      }
+      neverUsedPeople.add(personId)
+      neverUsed.push({
+        row: {
+          snapshot_date: latestDate,
+          momence_member_id: null,
+          momence_bought_membership_id: `crm-${b.id}`,
+          person_id: personId,
+          name: 'Introductory Offer',
+          start_date: null,
+          end_date: null,
+          credits_left: null,
+          credits_total: null,
+        },
+        reason: 'intro_never_used',
+        boughtDate: b.purchase_date,
+      })
+    }
+    // Momence copy source: not started, no newer pass, person not already listed
+    for (const c of introUnstartedInCopy) {
+      if (c.row.person_id && neverUsedPeople.has(c.row.person_id)) continue
+      if (renewedInMomence(c.row)) {
+        hiddenNeverUsed++
+        continue
+      }
+      if (c.row.person_id) neverUsedPeople.add(c.row.person_id)
+      neverUsed.push({ ...c, boughtDate: null })
+    }
 
-    function toRow({ row: r, reason }: Candidate): ClassPassCardRow {
+    const nameOf = await passHolderNames(
+      [...renewalKept, ...expiredKept, ...introEndedKept, ...neverUsed].map(c => c.row),
+    )
+
+    function toRow({ row: r, reason, boughtDate }: Candidate): ClassPassCardRow {
       const endDate = toLondonDate(r.end_date)
       return {
         passId: r.momence_bought_membership_id,
@@ -191,6 +326,7 @@ export async function GET() {
         daysLeft: endDate ? daysBetween(today, endDate) : null,
         reason,
         lastKnown: r.snapshot_date !== latestDate,
+        boughtDate: boughtDate ?? null,
       }
     }
 
@@ -202,9 +338,21 @@ export async function GET() {
       snapshotDate: latestDate,
       renewalDue: renewalKept.map(toRow).sort(byEnd),
       expiredWithCredits: expiredKept.map(toRow).sort(byEnd),
+      // Latest end date first: the most recent first visits are the warmest
+      introNextStep: introEndedKept.map(toRow).sort((a, b) => -byEnd(a, b)),
+      // Earliest purchase first; Momence-only rows (no purchase date) last
+      introNeverUsed: neverUsed
+        .map(toRow)
+        .sort(
+          (a, b) =>
+            (a.boughtDate ?? '9999-12-31').localeCompare(b.boughtDate ?? '9999-12-31') ||
+            a.name.localeCompare(b.name),
+        ),
       hiddenAsRenewed: {
         renewalDue: renewalCandidates.length - renewalKept.length,
         expiredWithCredits: expiredCandidates.length - expiredKept.length,
+        introNextStep: introEndedCandidates.length - introEndedKept.length,
+        introNeverUsed: hiddenNeverUsed,
       },
     })
   } catch (e) {

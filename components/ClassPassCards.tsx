@@ -4,8 +4,11 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import Collapsible from '@/components/ui/Collapsible'
 
-// The two class pass cards on the dashboard (data: app/api/class-pass-cards).
-// A pass is on one card only, chosen by the action needed.
+// The class pass pair and the Intro Offers pair on the dashboard
+// (data: app/api/class-pass-cards). A pass is on one card only, chosen by the
+// action needed. Rendered in pair order, left then right:
+//   Class Passes: Renewal due | Class Passes: Expired with credits (decide)
+//   Intro Offers: Next step   | Intro Offers: Bought, never used
 
 interface ClassPassCardRow {
   passId: string
@@ -16,14 +19,17 @@ interface ClassPassCardRow {
   hasCreditLimit: boolean
   endDate: string | null
   daysLeft: number | null
-  reason: 'ending' | 'low' | 'ending_low' | 'lapsed' | 'expired'
+  reason: 'ending' | 'low' | 'ending_low' | 'lapsed' | 'expired' | 'intro_ended' | 'intro_never_used'
   lastKnown: boolean
+  boughtDate: string | null
 }
 
 interface ClassPassCardsData {
   snapshotDate: string | null
   renewalDue: ClassPassCardRow[]
   expiredWithCredits: ClassPassCardRow[]
+  introNextStep: ClassPassCardRow[]
+  introNeverUsed: ClassPassCardRow[]
 }
 
 const THIS_YEAR = new Date().getFullYear()
@@ -59,13 +65,21 @@ function endsIn(days: number): string {
   return `ends in ${days} days`
 }
 
-// The reason in plain words, for example "ends in 3 days, 0.5 credits left",
-// "0 credits, ends 16 Nov", "lapsed 2 Oct", "ended 5 Oct, 3 credits left (last known)".
+// The reason in plain words, one per line, for example "ends in 3 days, 0.5 credits left",
+// "0 credits, ends 16 Nov", "ended 2 Oct, 0 credits left", "ended 6 Oct, unlimited pass",
+// "ended 2 Oct, credits unknown", "ended 5 Oct, 3 credits left (last known)".
 function reasonText(r: ClassPassCardRow): string {
   const known = r.lastKnown ? ' (last known)' : ''
+  const ended = r.endDate ? `ended ${shortDate(r.endDate)}` : 'ended'
   switch (r.reason) {
     case 'lapsed':
-      return r.endDate ? `lapsed ${shortDate(r.endDate)}` : 'lapsed'
+      if (!r.hasCreditLimit) return `${ended}, unlimited pass`
+      if (r.creditsLeft === null) return `${ended}, credits unknown`
+      return `${ended}, ${credits(r.creditsLeft)} left`
+    case 'intro_ended':
+      return ended
+    case 'intro_never_used':
+      return r.boughtDate ? `bought ${shortDate(r.boughtDate)}, not used` : 'not started in Momence'
     case 'expired':
       return `${r.endDate ? `ended ${shortDate(r.endDate)}, ` : ''}${credits(r.creditsLeft ?? 0)} left${known}`
     case 'ending':
@@ -100,7 +114,12 @@ function PassRows({ rows }: { rows: ClassPassCardRow[] }) {
           <span className="text-xs text-muted hidden sm:block truncate flex-1">{row.passName}</span>
           <span
             className="text-xs font-medium shrink-0 text-right"
-            style={{ color: row.reason === 'lapsed' ? 'var(--color-red-vivid)' : 'var(--color-amber-vivid)' }}
+            style={{
+              color:
+                row.reason === 'lapsed' || row.reason === 'intro_ended'
+                  ? 'var(--color-red-vivid)'
+                  : 'var(--color-amber-vivid)',
+            }}
           >
             {reasonText(row)}
           </span>
@@ -119,7 +138,14 @@ export default function ClassPassCards() {
     fetch('/api/class-pass-cards')
       .then(async r => {
         const d = await r.json().catch(() => null)
-        if (!r.ok || !d || !Array.isArray(d.renewalDue) || !Array.isArray(d.expiredWithCredits)) {
+        if (
+          !r.ok ||
+          !d ||
+          !Array.isArray(d.renewalDue) ||
+          !Array.isArray(d.expiredWithCredits) ||
+          !Array.isArray(d.introNextStep) ||
+          !Array.isArray(d.introNeverUsed)
+        ) {
           throw new Error('load failed')
         }
         setData(d)
@@ -130,6 +156,8 @@ export default function ClassPassCards() {
 
   const renewal = data?.renewalDue ?? []
   const expired = data?.expiredWithCredits ?? []
+  const introNext = data?.introNextStep ?? []
+  const introNever = data?.introNeverUsed ?? []
   const snapshotNote = data?.snapshotDate ? ` Momence copy of ${fullDate(data.snapshotDate)}.` : ''
 
   function body(rows: ClassPassCardRow[]) {
@@ -158,7 +186,8 @@ export default function ClassPassCards() {
       <Collapsible title="Class Passes: Renewal due" count={count(renewal)} tone={tone(renewal)}>
         <p className="text-xs text-muted mb-3">
           For a renewal reminder. Passes ending within 15 days, passes with 1.5 credits or fewer left, and passes that
-          lapsed in the last 30 days with no credits left or no credit limit. Hidden if the person has bought another
+          ended in the last 30 days with no credits left, no credit limit or credits unknown. Intro Offers are on their
+          own cards. Hidden if the person has bought another
           class pass since the pass started, or Momence shows a newer pass for them.
           {snapshotNote}
         </p>
@@ -172,6 +201,23 @@ export default function ClassPassCards() {
           class pass since, or Momence shows a newer pass for them.
         </p>
         {body(expired)}
+      </Collapsible>
+
+      <Collapsible title="Intro Offers: Next step" count={count(introNext)} tone={tone(introNext)}>
+        <p className="text-xs text-muted mb-3">
+          First visits to follow up. Intro Offers that ended in the last 30 days, most recent first. Hidden once the
+          person has bought a class pass since (not a drop-in), or Momence shows a newer pass for them.
+          {snapshotNote}
+        </p>
+        {body(introNext)}
+      </Collapsible>
+
+      <Collapsible title="Intro Offers: Bought, never used" count={count(introNever)} tone={tone(introNever)}>
+        <p className="text-xs text-muted mb-3">
+          Intro Offers bought in the last 60 days with no class booked since and no class pass bought since. Also any
+          Intro Offer Momence lists as not started. Momence only starts the offer on the first booked class.
+        </p>
+        {body(introNever)}
       </Collapsible>
     </>
   )

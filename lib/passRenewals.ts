@@ -1,9 +1,16 @@
 import { supabaseAdmin } from '@/lib/supabase-admin'
 import { fetchAll } from '@/lib/fetchAll'
 
+// An Introductory Offer (Momence pass name or CRM product name). It is a first
+// visit, not a class pass: it has its own dashboard cards and never counts as a
+// renewal (Build A, 9 Oct 2026).
+export function isIntroOffer(name: string | null | undefined): boolean {
+  return /introductory offer/i.test(name ?? '')
+}
+
 // A class pass purchase used to decide whether someone has renewed.
-// Counts: any product in category 'classes' whose name does not contain "drop"
-// (so drop-ins never count as a renewal).
+// Counts: any product in category 'classes' whose name contains neither "drop"
+// (drop-ins) nor "Introductory Offer".
 export interface ClassPassPurchase {
   id: string
   person_id: string
@@ -25,13 +32,19 @@ export async function getClassPassPurchases(personIds: string[]): Promise<ClassP
       .select('id, person_id, purchase_date, products!inner(name, category)')
       .eq('products.category', 'classes')
       .not('products.name', 'ilike', '%drop%')
+      .not('products.name', 'ilike', '%introductory offer%')
       .in('person_id', ids)
       .order('id'),
   )
 
   // Belt and braces: repeat the filters here in case the embedded filter is ignored.
   return rows
-    .filter(r => r.products?.category === 'classes' && !/drop/i.test(r.products?.name ?? ''))
+    .filter(
+      r =>
+        r.products?.category === 'classes' &&
+        !/drop/i.test(r.products?.name ?? '') &&
+        !isIntroOffer(r.products?.name),
+    )
     .map(r => ({ id: r.id, person_id: r.person_id, purchase_date: r.purchase_date }))
 }
 
