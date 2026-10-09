@@ -14,6 +14,7 @@ import {
   PASS_SNAPSHOT_COLUMNS,
   type PassSnapshotRow,
 } from '@/lib/passRenewals'
+import { syncPassFollowups, type PassFollowup, type FollowupStatus } from '@/lib/passFollowups'
 
 export const dynamic = 'force-dynamic'
 
@@ -28,7 +29,12 @@ export const dynamic = 'force-dynamic'
 //     lapsed  - ended in the last 30 days with 0 credits left, no credit limit,
 //               or credits left unknown
 //   expiredWithCredits (action: extension decision):
-//     ended in the last 60 days with credits left above 0
+//     ended in the last 60 days with credits left above 0. Since Build B (migration 012)
+//     each such pass gets a follow-up (pass_followups) and the card lists the OPEN
+//     follow-ups, of any age, with their step. A closed follow-up leaves the card.
+//     Loading this route creates and closes follow-ups (lib/passFollowups.ts, locked
+//     database steps). If that fails, the card falls back to the plain pass list and
+//     says so (followupsError).
 //
 // Introductory Offers (pass name contains "Introductory Offer") never go on
 // these two cards. They have their own pair (Build A, 9 Oct 2026):
@@ -76,6 +82,15 @@ export interface ClassPassCardRow {
   lastKnown: boolean
   // Intro Offers bought but never used: the CRM purchase date, if known
   boughtDate: string | null
+  // Expired with credits only: the follow-up (Build B), null if follow-ups are unavailable
+  followup: {
+    id: string
+    status: FollowupStatus
+    emailSentOn: string | null
+    followupDueOn: string | null
+    daysOffered: number | null
+    note: string | null
+  } | null
 }
 
 export async function GET() {
@@ -309,9 +324,33 @@ export async function GET() {
       neverUsed.push({ ...c, boughtDate: null })
     }
 
-    const nameOf = await passHolderNames(
-      [...renewalKept, ...expiredKept, ...introEndedKept, ...neverUsed].map(c => c.row),
-    )
+    // Follow-ups for Expired with credits (Build B)
+    let followups: PassFollowup[] | null = null
+    let followupsError: string | null = null
+    try {
+      const sync = await syncPassFollowups({ today, toOpen: expiredKept.map(c => c.row), latestRows })
+      followups = sync.open
+      if (sync.errors.length > 0) followupsError = sync.errors.slice(0, 3).join('; ')
+    } catch (e) {
+      followupsError =
+        e instanceof Error ? e.message : (e as { message?: string })?.message ?? 'Follow-ups failed'
+    }
+    const followupRow = (f: PassFollowup): PassSnapshotRow => ({
+      snapshot_date: latestDate,
+      momence_member_id: f.momence_member_id,
+      momence_bought_membership_id: f.momence_bought_membership_id,
+      person_id: f.person_id,
+      name: f.pass_name,
+      start_date: f.pass_start_date,
+      end_date: f.pass_end_date,
+      credits_left: f.credits_left,
+      credits_total: null,
+    })
+
+    const nameOf = await passHolderNames([
+      ...[...renewalKept, ...expiredKept, ...introEndedKept, ...neverUsed].map(c => c.row),
+      ...(followups ?? []).map(followupRow),
+    ])
 
     function toRow({ row: r, reason, boughtDate }: Candidate): ClassPassCardRow {
       const endDate = toLondonDate(r.end_date)
@@ -327,7 +366,49 @@ export async function GET() {
         reason,
         lastKnown: r.snapshot_date !== latestDate,
         boughtDate: boughtDate ?? null,
+        followup: null,
       }
+    }
+
+    function followupToRow(f: PassFollowup): ClassPassCardRow {
+      const r = followupRow(f)
+      return {
+        passId: f.momence_bought_membership_id,
+        personId: f.person_id,
+        name: nameOf(r),
+        passName: f.pass_name,
+        creditsLeft: num(f.credits_left),
+        hasCreditLimit: true,
+        endDate: f.pass_end_date,
+        daysLeft: daysBetween(today, f.pass_end_date),
+        reason: 'expired',
+        lastKnown: false,
+        boughtDate: null,
+        followup: {
+          id: f.id,
+          status: f.status,
+          emailSentOn: f.email_sent_on,
+          followupDueOn: f.followup_due_on,
+          daysOffered: f.days_offered,
+          note: f.note,
+        },
+      }
+    }
+
+    // Open follow-ups: follow-ups due today or overdue first, then To decide, then Offer
+    // extension, then follow-ups not due yet; earliest date first within each.
+    function followupRank(r: ClassPassCardRow): [number, string] {
+      const f = r.followup!
+      if (f.status === 'followup_due') {
+        const due = f.followupDueOn ?? '9999-12-31'
+        return [due <= today ? 0 : 3, due]
+      }
+      return [f.status === 'to_decide' ? 1 : 2, r.endDate ?? '9999-12-31']
+    }
+    const byFollowup = (a: ClassPassCardRow, b: ClassPassCardRow) => {
+      const [ra, da] = followupRank(a)
+      const [rb, db] = followupRank(b)
+      return ra - rb || da.localeCompare(db) || a.name.localeCompare(b.name)
     }
 
     // Earliest end date first (lapsed passes come first); no end date last.
@@ -337,7 +418,10 @@ export async function GET() {
     return NextResponse.json({
       snapshotDate: latestDate,
       renewalDue: renewalKept.map(toRow).sort(byEnd),
-      expiredWithCredits: expiredKept.map(toRow).sort(byEnd),
+      expiredWithCredits: followups
+        ? followups.map(followupToRow).sort(byFollowup)
+        : expiredKept.map(toRow).sort(byEnd),
+      followupsError,
       // Latest end date first: the most recent first visits are the warmest
       introNextStep: introEndedKept.map(toRow).sort((a, b) => -byEnd(a, b)),
       // Earliest purchase first; Momence-only rows (no purchase date) last

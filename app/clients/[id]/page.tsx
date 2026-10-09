@@ -2,6 +2,7 @@ import { notFound } from 'next/navigation'
 import { createServerClient } from '@/lib/supabase/server'
 import ClientDetail from '@/components/ClientDetail'
 import { fetchAll } from '@/lib/fetchAll'
+import type { PassFollowupHistoryRow } from '@/components/PassFollowupHistory'
 
 interface Props {
   params: Promise<{ id: string }>
@@ -90,6 +91,19 @@ export default async function ClientDetailPage({ params }: Props) {
     paymentsByPurchase.set(r.purchase_id as string, list)
   }
 
+  // Class pass follow-ups for this client (table pass_followups, migration 012, Build B).
+  // If the table cannot be read, the client page still loads without them.
+  const { data: followupRows } = await supabase
+    .from('pass_followups')
+    .select('id, pass_name, pass_end_date, credits_left, status, email_sent_on, followup_due_on, days_offered, outcome, closed_automatically, close_reason, closed_at, note, created_at')
+    .eq('person_id', id)
+    .order('pass_end_date', { ascending: false })
+    .order('created_at', { ascending: false })
+  const passFollowups: PassFollowupHistoryRow[] = (followupRows ?? []).map(f => ({
+    ...(f as unknown as PassFollowupHistoryRow),
+    credits_left: f.credits_left == null ? null : Number(f.credits_left),
+  }))
+
   const purchasesData = (purchases ?? []).map(p => {
     const prod = p.products as unknown as { name: string; category: string } | null
     return {
@@ -159,6 +173,7 @@ export default async function ClientDetailPage({ params }: Props) {
       attendance={attendanceData}
       leads={leadsData}
       products={productsData}
+      passFollowups={passFollowups}
     />
   )
 }
