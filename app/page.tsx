@@ -1,8 +1,7 @@
 import Link from 'next/link'
 import { createServerClient } from '@/lib/supabase/server'
 import DashboardCharts from '@/components/charts/DashboardCharts'
-import ExpiringPassesPanel from '@/components/ExpiringPassesPanel'
-import PassListsPanel from '@/components/PassListsPanel'
+import ClassPassCards from '@/components/ClassPassCards'
 import AwaitingPaymentPanel from '@/components/AwaitingPaymentPanel'
 import MomenceRefreshButton from '@/components/MomenceRefreshButton'
 import InvoiceDoneButton from '@/components/InvoiceDoneButton'
@@ -438,11 +437,13 @@ export default async function DashboardPage() {
 
       {/* Alert panels */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-        {/* Pairs, left then right: Expiring | Running low; Expired with credits | Online Classes: Gone Quiet;
-            Invoice to raise | Payments to match; Payments to Confirm | Stale Leads.
-            Every panel always shows, so the pairs never shift. PassListsPanel renders two panels. */}
-        <ExpiringPassesPanel />
-        <PassListsPanel />
+        {/* Pairs, left then right (stacked in the same order on a phone):
+            Class Passes: Renewal due | Expired with credits (decide);
+            Online Classes: Gone Quiet | Stale Leads;
+            Payments to Confirm | Invoice to raise.
+            Every card always shows, so the pairs never shift. ClassPassCards renders two cards.
+            Payments to match is an exception: full width, only when something needs matching. */}
+        <ClassPassCards />
 
         <Collapsible
           title="Online Classes: Gone Quiet"
@@ -466,14 +467,43 @@ export default async function DashboardPage() {
           )}
         </Collapsible>
 
-        {/* Stripe balance payments to act on: Invoice to raise, Payments to match (always shown, so the pairs stay in place; status line at the bottom of the page) */}
+        <Collapsible
+          title="Stale Leads"
+          count={staleLeads.length}
+          tone={staleLeads.length > 0 ? 'warning' : 'neutral'}
+        >
+          {staleLeads.length === 0 ? (
+            <p className="text-sm text-muted">Nothing to action.</p>
+          ) : (
+            staleLeads.map(lead => {
+              const person = lead.people as unknown as { first_name: string; last_name: string } | null
+              const days = daysSince(lead.last_followup_date ?? lead.date_added)
+              return (
+                <Link
+                  key={lead.id}
+                  href={`/leads/${lead.id}`}
+                  className="flex items-center justify-between py-2 border-b border-card-border last:border-0 hover:bg-grey-subtle -mx-1 px-1 rounded"
+                >
+                  <span className="text-sm font-medium text-heading">
+                    {person?.first_name} {person?.last_name}
+                  </span>
+                  <span className="text-xs text-muted ml-2">{days}d ago</span>
+                </Link>
+              )
+            })
+          )}
+        </Collapsible>
+
+        <AwaitingPaymentPanel />
+
+        {/* Stripe balance payments to act on (status line at the bottom of the page) */}
         {(() => {
           const b = balanceCheck
           const toMatch = b.toMatchCount + b.unmatchedRefunds.length
           const methodText = (m: string) => (m === 'bacs' ? 'Bacs' : 'card')
           return (
             <>
-              {b.ok && (
+              {b.ok ? (
                   <Collapsible title="Invoice to raise" count={b.invoiceCount} tone={b.invoiceCount > 0 ? 'warning' : 'neutral'}>
                     {b.invoiceCount === 0 && <p className="px-4 pb-4 text-sm text-muted md:px-5">Nothing to invoice.</p>}
                     <ul className={`space-y-2 px-4 pb-4 text-sm text-body md:px-5${b.invoiceCount === 0 ? ' hidden' : ''}`}>
@@ -507,8 +537,15 @@ export default async function DashboardPage() {
                       )}
                     </ul>
                   </Collapsible>
+              ) : (
+                <Collapsible title="Invoice to raise" count="!" tone="danger">
+                  <p className="px-4 pb-4 text-sm md:px-5" style={{ color: 'var(--color-red-vivid)' }}>
+                    Could not load invoices to raise. Refresh the page to try again.
+                  </p>
+                </Collapsible>
               )}
-              {b.ok && (
+              {b.ok && (toMatch > 0 || b.waitingRefunds.length > 0) && (
+                <div className="md:col-span-2">
                   <Collapsible title="Payments to match" count={toMatch} tone={toMatch > 0 ? 'danger' : 'neutral'}>
                     {toMatch === 0 && b.waitingRefunds.length === 0 && <p className="px-4 pb-4 text-sm text-muted md:px-5">Nothing to match.</p>}
                     <ul className={`space-y-2 px-4 pb-4 text-sm text-body md:px-5${toMatch === 0 && b.waitingRefunds.length === 0 ? ' hidden' : ''}`}>
@@ -535,40 +572,11 @@ export default async function DashboardPage() {
                       )}
                     </ul>
                   </Collapsible>
+                </div>
               )}
-
             </>
           )
         })()}
-
-        <AwaitingPaymentPanel />
-
-        <Collapsible
-          title="Stale Leads"
-          count={staleLeads.length}
-          tone={staleLeads.length > 0 ? 'warning' : 'neutral'}
-        >
-          {staleLeads.length === 0 ? (
-            <p className="text-sm text-muted">Nothing to action.</p>
-          ) : (
-            staleLeads.map(lead => {
-              const person = lead.people as unknown as { first_name: string; last_name: string } | null
-              const days = daysSince(lead.last_followup_date ?? lead.date_added)
-              return (
-                <Link
-                  key={lead.id}
-                  href={`/leads/${lead.id}`}
-                  className="flex items-center justify-between py-2 border-b border-card-border last:border-0 hover:bg-grey-subtle -mx-1 px-1 rounded"
-                >
-                  <span className="text-sm font-medium text-heading">
-                    {person?.first_name} {person?.last_name}
-                  </span>
-                  <span className="text-xs text-muted ml-2">{days}d ago</span>
-                </Link>
-              )
-            })
-          )}
-        </Collapsible>
       </div>
 
       {/* Charts */}
