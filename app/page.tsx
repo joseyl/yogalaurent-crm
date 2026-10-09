@@ -438,35 +438,14 @@ export default async function DashboardPage() {
 
       {/* Alert panels */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-        <Collapsible
-          title="Stale Leads"
-          count={staleLeads.length}
-          tone={staleLeads.length > 0 ? 'warning' : 'neutral'}
-        >
-          {staleLeads.length === 0 ? (
-            <p className="text-sm text-muted">Nothing to action.</p>
-          ) : (
-            staleLeads.map(lead => {
-              const person = lead.people as unknown as { first_name: string; last_name: string } | null
-              const days = daysSince(lead.last_followup_date ?? lead.date_added)
-              return (
-                <Link
-                  key={lead.id}
-                  href={`/leads/${lead.id}`}
-                  className="flex items-center justify-between py-2 border-b border-card-border last:border-0 hover:bg-grey-subtle -mx-1 px-1 rounded"
-                >
-                  <span className="text-sm font-medium text-heading">
-                    {person?.first_name} {person?.last_name}
-                  </span>
-                  <span className="text-xs text-muted ml-2">{days}d ago</span>
-                </Link>
-              )
-            })
-          )}
-        </Collapsible>
+        {/* Pairs, left then right: Expiring | Running low; Expired with credits | Online Classes: Gone Quiet;
+            Invoice to raise | Payments to match; Payments to Confirm | Stale Leads.
+            Every panel always shows, so the pairs never shift. PassListsPanel renders two panels. */}
+        <ExpiringPassesPanel />
+        <PassListsPanel />
 
         <Collapsible
-          title="Gone Quiet"
+          title="Online Classes: Gone Quiet"
           count={goneQuiet.length}
           tone={goneQuiet.length > 0 ? 'warning' : 'neutral'}
         >
@@ -487,45 +466,13 @@ export default async function DashboardPage() {
           )}
         </Collapsible>
 
-        <ExpiringPassesPanel />
-        <PassListsPanel />
-        <AwaitingPaymentPanel />
-
-        {/* Stripe balance payments to act on (status line at the bottom of the page) */}
+        {/* Stripe balance payments to act on: Invoice to raise, Payments to match (always shown, so the pairs stay in place; status line at the bottom of the page) */}
         {(() => {
           const b = balanceCheck
           const toMatch = b.toMatchCount + b.unmatchedRefunds.length
           const methodText = (m: string) => (m === 'bacs' ? 'Bacs' : 'card')
           return (
             <>
-              {b.ok && toMatch > 0 && (
-                  <Collapsible title="Payments to match" count={toMatch} tone="danger">
-                    <ul className="space-y-2 px-4 pb-4 text-sm text-body md:px-5">
-                      {b.toMatchRows.map(r => (
-                        <li key={r.id}>
-                          {formatUKDateTime(r.paid_at)}, {formatGBP(Number(r.amount_gbp))}, {methodText(r.method)}, order {r.order_ref}
-                          {r.programme && <>, {r.programme}</>}
-                          {r.note && <span className="block text-xs text-muted">{r.note}</span>}
-                        </li>
-                      ))}
-                      {b.toMatchCount > b.toMatchRows.length && (
-                        <li className="text-xs text-muted">Showing latest {b.toMatchRows.length} payments</li>
-                      )}
-                      {b.unmatchedRefunds.map(r => (
-                        <li key={r.id}>
-                          Refund {formatUKDateTime(r.refunded_at)}, {formatGBP(Number(r.refunded_gbp))} in total{r.order_ref && <>, order {r.order_ref}</>}
-                          {r.note && <span className="block text-xs text-muted">{r.note}</span>}
-                        </li>
-                      ))}
-                      {b.waitingRefunds.length > 0 && (
-                        <li className="text-xs text-muted">
-                          {b.waitingRefunds.length === 1 ? '1 refund is' : `${b.waitingRefunds.length} refunds are`} waiting for its payment to be matched; applied when it is.
-                        </li>
-                      )}
-                    </ul>
-                  </Collapsible>
-              )}
-
               {b.ok && (
                   <Collapsible title="Invoice to raise" count={b.invoiceCount} tone={b.invoiceCount > 0 ? 'warning' : 'neutral'}>
                     {b.invoiceCount === 0 && <p className="px-4 pb-4 text-sm text-muted md:px-5">Nothing to invoice.</p>}
@@ -561,9 +508,67 @@ export default async function DashboardPage() {
                     </ul>
                   </Collapsible>
               )}
+              {b.ok && (
+                  <Collapsible title="Payments to match" count={toMatch} tone={toMatch > 0 ? 'danger' : 'neutral'}>
+                    {toMatch === 0 && b.waitingRefunds.length === 0 && <p className="px-4 pb-4 text-sm text-muted md:px-5">Nothing to match.</p>}
+                    <ul className={`space-y-2 px-4 pb-4 text-sm text-body md:px-5${toMatch === 0 && b.waitingRefunds.length === 0 ? ' hidden' : ''}`}>
+                      {b.toMatchRows.map(r => (
+                        <li key={r.id}>
+                          {formatUKDateTime(r.paid_at)}, {formatGBP(Number(r.amount_gbp))}, {methodText(r.method)}, order {r.order_ref}
+                          {r.programme && <>, {r.programme}</>}
+                          {r.note && <span className="block text-xs text-muted">{r.note}</span>}
+                        </li>
+                      ))}
+                      {b.toMatchCount > b.toMatchRows.length && (
+                        <li className="text-xs text-muted">Showing latest {b.toMatchRows.length} payments</li>
+                      )}
+                      {b.unmatchedRefunds.map(r => (
+                        <li key={r.id}>
+                          Refund {formatUKDateTime(r.refunded_at)}, {formatGBP(Number(r.refunded_gbp))} in total{r.order_ref && <>, order {r.order_ref}</>}
+                          {r.note && <span className="block text-xs text-muted">{r.note}</span>}
+                        </li>
+                      ))}
+                      {b.waitingRefunds.length > 0 && (
+                        <li className="text-xs text-muted">
+                          {b.waitingRefunds.length === 1 ? '1 refund is' : `${b.waitingRefunds.length} refunds are`} waiting for its payment to be matched; applied when it is.
+                        </li>
+                      )}
+                    </ul>
+                  </Collapsible>
+              )}
+
             </>
           )
         })()}
+
+        <AwaitingPaymentPanel />
+
+        <Collapsible
+          title="Stale Leads"
+          count={staleLeads.length}
+          tone={staleLeads.length > 0 ? 'warning' : 'neutral'}
+        >
+          {staleLeads.length === 0 ? (
+            <p className="text-sm text-muted">Nothing to action.</p>
+          ) : (
+            staleLeads.map(lead => {
+              const person = lead.people as unknown as { first_name: string; last_name: string } | null
+              const days = daysSince(lead.last_followup_date ?? lead.date_added)
+              return (
+                <Link
+                  key={lead.id}
+                  href={`/leads/${lead.id}`}
+                  className="flex items-center justify-between py-2 border-b border-card-border last:border-0 hover:bg-grey-subtle -mx-1 px-1 rounded"
+                >
+                  <span className="text-sm font-medium text-heading">
+                    {person?.first_name} {person?.last_name}
+                  </span>
+                  <span className="text-xs text-muted ml-2">{days}d ago</span>
+                </Link>
+              )
+            })
+          )}
+        </Collapsible>
       </div>
 
       {/* Charts */}
