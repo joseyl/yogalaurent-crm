@@ -3,10 +3,18 @@
 import { useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { GROUPS, DISMISS_REASONS, type GapGroup, type GoneQuietRow } from '@/lib/goneQuietShared'
+import {
+  GROUPS,
+  DISMISS_REASONS,
+  BULK_DISMISS_REASONS,
+  type GapGroup,
+  type GoneQuietRow,
+} from '@/lib/goneQuietShared'
 
 // The Gone Quiet page (Build C). Group tabs, a Came once filter, a Dismissed view, and
 // Contacted and Dismiss per person (saved through app/api/gone-quiet/[personId]).
+// Tick boxes (migration 016): Contacted, Undo contacted, Dismiss and Bring back for many people
+// at once, all or nothing (saved through app/api/gone-quiet/bulk).
 
 const THIS_YEAR = new Date().getFullYear()
 
@@ -59,6 +67,8 @@ export default function GoneQuietList({
   const [group, setGroup] = useState<GapGroup>(initialGroup)
   const [view, setView] = useState<'list' | 'dismissed'>(initialView)
   const [cameOnce, setCameOnce] = useState(initialCameOnce)
+  const [ticked, setTicked] = useState<Set<string>>(new Set())
+  const [done, setDone] = useState<string | null>(null)
 
   function go(next: { group?: GapGroup; view?: 'list' | 'dismissed'; cameOnce?: boolean }) {
     const g = next.group ?? group
@@ -67,6 +77,8 @@ export default function GoneQuietList({
     setGroup(g)
     setView(v)
     setCameOnce(c)
+    setTicked(new Set())
+    setDone(null)
     const qs = new URLSearchParams()
     if (v === 'dismissed') qs.set('view', 'dismissed')
     else qs.set('group', g)
@@ -93,6 +105,25 @@ export default function GoneQuietList({
       ? dismissed.filter(r => !cameOnce || r.came_once)
       : listed.filter(r => r.gap_group === group && (!cameOnce || r.came_once))
   const current = GROUPS.find(g => g.key === group)!
+
+  // Only people still shown count as ticked (after a refresh some may have left the list)
+  const tickedShown = shown.filter(r => ticked.has(r.person_id))
+  const allTicked = shown.length > 0 && tickedShown.length === shown.length
+
+  function toggle(id: string) {
+    setDone(null)
+    setTicked(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  function toggleAll() {
+    setDone(null)
+    setTicked(allTicked ? new Set() : new Set(shown.map(r => r.person_id)))
+  }
 
   return (
     <div>
@@ -157,15 +188,236 @@ export default function GoneQuietList({
         </p>
       )}
 
+      {shown.length > 0 && (
+        <BulkBar
+          view={view}
+          today={today}
+          shownCount={shown.length}
+          allTicked={allTicked}
+          ticked={tickedShown}
+          onToggleAll={toggleAll}
+          onClear={() => setTicked(new Set())}
+          onSaved={msg => {
+            setTicked(new Set())
+            setDone(msg)
+            router.refresh()
+          }}
+        />
+      )}
+      {done && <p className="text-sm text-body mb-3">{done}</p>}
+
       {shown.length === 0 ? (
         <div className="card p-4 text-sm text-muted">Nobody here.</div>
       ) : (
         <ul className="card divide-y divide-card-border">
           {shown.map(r => (
-            <PersonRow key={r.person_id} r={r} today={today} view={view} onChanged={() => router.refresh()} />
+            <PersonRow
+              key={r.person_id}
+              r={r}
+              today={today}
+              view={view}
+              ticked={ticked.has(r.person_id)}
+              onToggle={() => toggle(r.person_id)}
+              onChanged={() => router.refresh()}
+            />
           ))}
         </ul>
       )}
+    </div>
+  )
+}
+
+type BulkAction = 'contacted' | 'uncontacted' | 'dismiss' | 'undismiss'
+
+// Tick box actions: choose, fill in, confirm with the count, then one all-or-nothing save.
+function BulkBar({
+  view,
+  today,
+  shownCount,
+  allTicked,
+  ticked,
+  onToggleAll,
+  onClear,
+  onSaved,
+}: {
+  view: 'list' | 'dismissed'
+  today: string
+  shownCount: number
+  allTicked: boolean
+  ticked: GoneQuietRow[]
+  onToggleAll: () => void
+  onClear: () => void
+  onSaved: (message: string) => void
+}) {
+  const [action, setAction] = useState<BulkAction | null>(null)
+  const [confirming, setConfirming] = useState(false)
+  const [on, setOn] = useState(today)
+  const [reason, setReason] = useState('')
+  const [note, setNote] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const n = ticked.length
+  const contactedCount = ticked.filter(r => r.contacted).length
+  const who = (k: number) => `${k} ${k === 1 ? 'person' : 'people'}`
+
+  function start(a: BulkAction) {
+    setAction(a)
+    setError(null)
+    setOn(today)
+    setReason('')
+    setNote('')
+    // Nothing to fill in for these two: straight to the confirmation
+    setConfirming(a === 'uncontacted' || a === 'undismiss')
+  }
+
+  function cancel() {
+    setAction(null)
+    setConfirming(false)
+    setError(null)
+  }
+
+  function question(): string {
+    const trimmed = note.trim()
+    switch (action) {
+      case 'contacted': {
+        const skip = contactedCount > 0 ? ` ${who(contactedCount)} already contacted will be skipped.` : ''
+        return `Mark ${who(n)} as contacted on ${shortDate(on)}${trimmed ? `, note "${trimmed}"` : ''}?${skip}`
+      }
+      case 'dismiss': {
+        const label = BULK_DISMISS_REASONS.find(d => d.key === reason)?.label ?? reason
+        return `Dismiss ${who(n)} as ${label}${trimmed ? `, note "${trimmed}"` : ''}? They leave the list and the Mailchimp export.`
+      }
+      case 'uncontacted':
+        return `Undo contacted for ${who(n)}? Their contact dates and notes are removed.`
+      case 'undismiss':
+        return `Bring back ${who(n)}?`
+      default:
+        return ''
+    }
+  }
+
+  async function save() {
+    if (!action) return
+    setSaving(true)
+    setError(null)
+    try {
+      const res = await fetch('/api/gone-quiet/bulk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          personIds: ticked.map(r => r.person_id),
+          action,
+          ...(action === 'contacted' ? { on, note } : {}),
+          ...(action === 'dismiss' ? { reason, note } : {}),
+        }),
+      })
+      const d = await res.json().catch(() => null)
+      if (!res.ok) {
+        setError(d?.error ?? 'Nothing saved, try again')
+        return
+      }
+      const skipped = Number(d?.skipped ?? 0)
+      cancel()
+      onSaved(`Saved for ${who(Number(d?.changed ?? 0))}${skipped > 0 ? `, ${skipped} skipped (already done)` : ''}.`)
+    } catch {
+      setError('Nothing saved, try again')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="card p-4 mb-3 flex flex-col gap-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <label className="flex items-center gap-2 text-sm text-body min-h-[44px] md:min-h-0">
+          <input type="checkbox" checked={allTicked} onChange={onToggleAll} disabled={saving} />
+          Select all shown ({shownCount})
+        </label>
+        {n > 0 && <span className="text-sm text-muted">{who(n)} ticked</span>}
+      </div>
+
+      {n > 0 && !action && (
+        <div className="flex flex-wrap items-center gap-2 text-xs">
+          {view === 'list' ? (
+            <>
+              <button type="button" className={`btn-primary ${btn}`} onClick={() => start('contacted')}>
+                Mark contacted
+              </button>
+              <button type="button" className={`btn-secondary ${btn}`} onClick={() => start('dismiss')}>
+                Dismiss
+              </button>
+              {contactedCount > 0 && (
+                <button type="button" className={`btn-secondary ${btn}`} onClick={() => start('uncontacted')}>
+                  Undo contacted ({contactedCount})
+                </button>
+              )}
+            </>
+          ) : (
+            <button type="button" className={`btn-primary ${btn}`} onClick={() => start('undismiss')}>
+              Bring back
+            </button>
+          )}
+          <button type="button" className={`btn-secondary ${btn}`} onClick={onClear}>
+            Clear ticks
+          </button>
+        </div>
+      )}
+
+      {n > 0 && action && !confirming && (
+        <div className="flex flex-wrap items-center gap-2 text-xs">
+          {action === 'contacted' ? (
+            <>
+              <label className="text-muted">Email sent on</label>
+              <input type="date" className={fieldClass} max={today} value={on} onChange={e => setOn(e.target.value)} />
+            </>
+          ) : (
+            <select className={fieldClass} value={reason} onChange={e => setReason(e.target.value)}>
+              <option value="">Reason</option>
+              {BULK_DISMISS_REASONS.map(d => (
+                <option key={d.key} value={d.key}>{d.label}</option>
+              ))}
+            </select>
+          )}
+          <input
+            className={`${fieldClass} flex-1 min-w-[10rem]`}
+            placeholder={action === 'contacted' ? 'Note, e.g. Mailchimp: autumn win-back (optional)' : 'Note (optional)'}
+            maxLength={1000}
+            value={note}
+            onChange={e => setNote(e.target.value)}
+          />
+          <button
+            type="button"
+            className={`btn-primary ${btn}`}
+            disabled={action === 'contacted' ? !on : !reason}
+            onClick={() => setConfirming(true)}
+          >
+            Next
+          </button>
+          <button type="button" className={`btn-secondary ${btn}`} onClick={cancel}>
+            Cancel
+          </button>
+          {action === 'dismiss' && (
+            <span className="text-muted w-full">Deceased is one person at a time, because it also changes the client status.</span>
+          )}
+        </div>
+      )}
+
+      {n > 0 && action && confirming && (
+        <div className="flex flex-col gap-2 text-xs">
+          <p className="text-sm text-body">{question()}</p>
+          <div className="flex flex-wrap items-center gap-2">
+            <button type="button" className={`btn-primary ${btn}`} disabled={saving} onClick={save}>
+              {saving ? 'Saving...' : 'Yes, save'}
+            </button>
+            <button type="button" className={`btn-secondary ${btn}`} disabled={saving} onClick={cancel}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {error && <p className="text-xs" style={{ color: 'var(--color-red-vivid)' }}>{error}</p>}
     </div>
   )
 }
@@ -174,11 +426,15 @@ function PersonRow({
   r,
   today,
   view,
+  ticked,
+  onToggle,
   onChanged,
 }: {
   r: GoneQuietRow
   today: string
   view: 'list' | 'dismissed'
+  ticked: boolean
+  onToggle: () => void
   onChanged: () => void
 }) {
   const [mode, setMode] = useState<'idle' | 'contacted' | 'dismiss'>('idle')
@@ -220,6 +476,9 @@ function PersonRow({
     <li className="p-4" style={grey ? { opacity: 0.5 } : undefined}>
       <div className="flex flex-col gap-1 sm:flex-row sm:items-baseline sm:justify-between">
         <span className="flex flex-wrap items-center gap-2">
+          <label className="flex items-center min-h-[44px] min-w-[32px] md:min-h-0 md:min-w-0 cursor-pointer">
+            <input type="checkbox" checked={ticked} onChange={onToggle} aria-label={`Tick ${name(r)}`} />
+          </label>
           <Link href={`/clients/${r.person_id}`} className="text-sm font-medium text-heading underline">
             {name(r)}
           </Link>
@@ -236,6 +495,7 @@ function PersonRow({
         {r.classes_attended} {r.classes_attended === 1 ? 'class' : 'classes'}, last class {shortDate(r.last_class)}
         {r.last_purchase ? `; last purchase ${shortDate(r.last_purchase)}` : '; no purchase'}
         {r.contacted_on && view === 'list' && r.contacted && `; contacted ${shortDate(r.contacted_on)}`}
+        {r.contacted_on && view === 'list' && r.contacted && r.contact_note && ` (${r.contact_note})`}
       </p>
 
       {view === 'dismissed' ? (
@@ -253,7 +513,14 @@ function PersonRow({
         <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
           <label className="text-muted">Email sent on</label>
           <input type="date" className={fieldClass} max={today} value={on} onChange={e => setOn(e.target.value)} />
-          <button type="button" className={`btn-primary ${btn}`} disabled={saving || !on} onClick={() => act('contacted', { on })}>
+          <input
+            className={`${fieldClass} flex-1 min-w-[10rem]`}
+            placeholder="Note (optional)"
+            maxLength={1000}
+            value={note}
+            onChange={e => setNote(e.target.value)}
+          />
+          <button type="button" className={`btn-primary ${btn}`} disabled={saving || !on} onClick={() => act('contacted', { on, note })}>
             Save
           </button>
           <button type="button" className={`btn-secondary ${btn}`} disabled={saving} onClick={() => setMode('idle')}>
@@ -294,11 +561,11 @@ function PersonRow({
               Undo contacted
             </button>
           ) : (
-            <button type="button" className={`btn-primary ${btn}`} disabled={saving} onClick={() => { setOn(today); setMode('contacted') }}>
+            <button type="button" className={`btn-primary ${btn}`} disabled={saving} onClick={() => { setOn(today); setNote(''); setMode('contacted') }}>
               Contacted
             </button>
           )}
-          <button type="button" className={`btn-secondary ${btn}`} disabled={saving} onClick={() => setMode('dismiss')}>
+          <button type="button" className={`btn-secondary ${btn}`} disabled={saving} onClick={() => { setNote(''); setMode('dismiss') }}>
             Dismiss
           </button>
         </div>

@@ -24,6 +24,10 @@ export const DISMISS_REASONS: { key: DismissReason; label: string }[] = [
   { key: 'other', label: 'Other' },
 ]
 
+// Bulk dismiss (tick boxes): deceased is one person at a time, because it also changes the
+// client status (migration 016).
+export const BULK_DISMISS_REASONS = DISMISS_REASONS.filter(d => d.key !== 'deceased')
+
 export interface GoneQuietRow {
   person_id: string
   first_name: string | null
@@ -39,6 +43,7 @@ export interface GoneQuietRow {
   gap_group: GapGroup | 'active'
   contacted_on: string | null
   contacted: boolean
+  contact_note: string | null
   dismissed_on: string | null
   dismiss_reason: DismissReason | null
   dismiss_note: string | null

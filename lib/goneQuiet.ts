@@ -16,7 +16,7 @@ export { GROUPS, DISMISS_REASONS, isGapGroup } from '@/lib/goneQuietShared'
 export type { GapGroup, DismissReason, GoneQuietRow } from '@/lib/goneQuietShared'
 
 const COLUMNS =
-  'person_id, first_name, last_name, email, status, classes_attended, came_once, last_class, last_purchase, last_activity, days_since, gap_group, contacted_on, contacted, dismissed_on, dismiss_reason, dismiss_note, dismissed, listed'
+  'person_id, first_name, last_name, email, status, classes_attended, came_once, last_class, last_purchase, last_activity, days_since, gap_group, contacted_on, contacted, dismissed_on, dismiss_reason, dismiss_note, dismissed, listed, contact_note'
 
 // Everyone listed plus everyone dismissed (for the Dismissed view). Paged, no cap.
 // Sorted longest gap first, then surname.

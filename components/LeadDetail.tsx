@@ -188,6 +188,13 @@ export default function LeadDetail({ lead: initialLead }: Props) {
               stale={days >= 7}
             />
           </div>
+          {/* Name, email, phone and country are edited on the person's record (same form as clients) */}
+          <Link
+            href={`/clients/${lead.person_id}`}
+            className="btn-secondary inline-flex items-center mt-4 text-xs min-h-[44px] md:min-h-0"
+          >
+            Edit name or contact details
+          </Link>
         </Card>
 
         {/* Right: actions */}
