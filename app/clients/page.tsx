@@ -265,7 +265,12 @@ export default function ClientsPage() {
     <div>
       <PageHeader
         title="Clients"
-        actions={<Link href="/clients/new" className="btn-primary">Add Client</Link>}
+        actions={
+          <>
+            <Link href="/clients/duplicates" className="btn-secondary">Possible duplicates</Link>
+            <Link href="/clients/new" className="btn-primary">Add Client</Link>
+          </>
+        }
       />
 
       {/* Toolbar */}
