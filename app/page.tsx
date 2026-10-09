@@ -11,6 +11,7 @@ import PageHeader from '@/components/ui/PageHeader'
 import KpiCard from '@/components/ui/KpiCard'
 import Collapsible from '@/components/ui/Collapsible'
 import { londonToday } from '@/lib/passRenewals'
+import { getGoneQuietCounts, GROUPS } from '@/lib/goneQuiet'
 
 export const dynamic = 'force-dynamic'
 
@@ -78,8 +79,6 @@ async function fetchDashboardData() {
   const sevenDaysAgo = daysAgo(7)
   const sevenDaysAgoIso = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString()
   const thirtyDaysAgoIso = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString()
-  const twentyEightDaysAgo = daysAgo(28)
-  const oneEightyDaysAgo = daysAgo(180)
   const elevenMonthsAgo = new Date(Date.UTC(londonYear, londonMonth - 11,  1)).toISOString().split('T')[0]
 
   const [
@@ -88,8 +87,7 @@ async function fetchDashboardData() {
     { data: monthPurchases },
     { data: yearPurchases },
     { data: openLeadsData },
-    attendance180,
-    { data: clients },
+    goneQuietCounts,
     { data: chartMonthPurchases },
     { data: clientsData },
     { data: leadsData },
@@ -111,23 +109,14 @@ async function fetchDashboardData() {
     supabase.from('leads').select('*', { count: 'exact', head: true }).in('status', ['new', 'contacted', 'quoted']),
     supabase.from('purchases').select('amount_gbp, products(entity)').gte('purchase_date', firstOfMonth).lte('purchase_date', today),
     supabase.from('purchases').select('amount_gbp, products(entity)').gte('purchase_date', firstOfYear).lte('purchase_date', today),
-    // Open leads and clients are paged (fetchAll), so the Stale Leads and Gone Quiet
-    // totals are never cut off at Supabase's 1,000-row cap.
+    // Open leads are paged (fetchAll), so the Stale Leads total is never cut off at
+    // Supabase's 1,000-row cap.
     fetchAll<{ id: string; last_followup_date: string | null; date_added: string; assigned_to: string | null; people: unknown }>(
       () => supabase.from('leads').select('id, last_followup_date, date_added, assigned_to, people(first_name, last_name)').in('status', ['new', 'contacted', 'quoted']).order('id')
     ).then(data => ({ data })),
-    fetchAll<{ person_id: string; class_date: string }>(
-      () => supabase
-        .from('attendance_v2')
-        .select('person_id, class_date')
-        .gte('class_date', oneEightyDaysAgo)
-        .eq('cancelled', false)
-        .eq('duplicate_of_momence', false)
-        .not('person_id', 'is', null)
-    ),
-    fetchAll<{ id: string; first_name: string | null; last_name: string | null }>(
-      () => supabase.from('people').select('id, first_name, last_name').eq('status', 'client').order('id')
-    ).then(data => ({ data })),
+    // Gone Quiet counts per group (Build C, view gone_quiet_people, migration 013).
+    // null if the counts cannot be read, so the card never shows a false 0.
+    getGoneQuietCounts().catch(() => null),
     supabase.from('purchases').select('amount_gbp, products(category)').gte('purchase_date', firstOfMonth).lte('purchase_date', today),
     // New Clients line: each client dated by first purchase, else first class, else load date
     // (view client_first_activity, supabase/migrations/005_client_first_activity.sql)
@@ -199,26 +188,6 @@ async function fetchDashboardData() {
   const staleLeads = staleLeadsAll.slice(0, 20)
   const staleLeadsTotal = staleLeadsAll.length
 
-  // Gone quiet
-  const byPerson: Record<string, { recent: number; older: number }> = {}
-  for (const a of attendance180) {
-    if (!byPerson[a.person_id]) byPerson[a.person_id] = { recent: 0, older: 0 }
-    if (a.class_date >= twentyEightDaysAgo) {
-      byPerson[a.person_id].recent++
-    } else {
-      byPerson[a.person_id].older++
-    }
-  }
-  // Gone quiet (the card shows the true total; the list stops at 20)
-  const goneQuietAll = (clients ?? [])
-    .filter(c => {
-      const att = byPerson[c.id]
-      return att && att.older > 0 && att.recent < 2
-    })
-    .sort((a, b) => (a.last_name ?? '').localeCompare(b.last_name ?? ''))
-  const goneQuiet = goneQuietAll.slice(0, 20)
-  const goneQuietTotal = goneQuietAll.length
-
   // Category revenue chart
   const categoryMap: Record<string, number> = {}
   for (const p of chartMonthPurchases ?? []) {
@@ -271,8 +240,7 @@ async function fetchDashboardData() {
     summary: { activeClients: activeClients ?? 0, openLeads: openLeads ?? 0, revenueThisMonth, revenueThisMonthLR, revenueThisMonthTTL, revenueThisYear, revenueThisYearLR, revenueThisYearTTL },
     staleLeads,
     staleLeadsTotal,
-    goneQuiet,
-    goneQuietTotal,
+    goneQuietCounts,
     categoryRevenue,
     trend,
     latestSync: latestSync as { status: string; finished_at: string | null; error: string | null; started_at: string } | null,
@@ -355,7 +323,7 @@ async function fetchDashboardData() {
 }
 
 export default async function DashboardPage() {
-  const { summary, staleLeads, staleLeadsTotal, goneQuiet, goneQuietTotal, categoryRevenue, trend, latestSync, latestSyncUnavailable, webhookCheck, unmatchedCheck, paymentLinkCheck, momenceSalesCheck, balanceCheck, futureCheck } = await fetchDashboardData()
+  const { summary, staleLeads, staleLeadsTotal, goneQuietCounts, categoryRevenue, trend, latestSync, latestSyncUnavailable, webhookCheck, unmatchedCheck, paymentLinkCheck, momenceSalesCheck, balanceCheck, futureCheck } = await fetchDashboardData()
 
   const dotColor = latestSyncUnavailable
     ? 'var(--color-amber-vivid)'
@@ -457,30 +425,37 @@ export default async function DashboardPage() {
             Payments to match is an exception: full width, only when something needs matching. */}
         <ClassPassCards />
 
-        <Collapsible
-          title="Online Classes: Gone Quiet"
-          count={goneQuietTotal}
-          tone={goneQuietTotal > 0 ? 'warning' : 'neutral'}
-        >
-          {goneQuietTotal > goneQuiet.length && (
-            <p className="text-xs text-muted mb-3">Showing the first {goneQuiet.length} of {goneQuietTotal}, by surname.</p>
-          )}
-          {goneQuiet.length === 0 ? (
-            <p className="text-sm text-muted">Nothing to action.</p>
-          ) : (
-            goneQuiet.map(client => (
-              <Link
-                key={client.id}
-                href={`/clients/${client.id}`}
-                className="flex items-center py-2 border-b border-card-border last:border-0 hover:bg-grey-subtle -mx-1 px-1 rounded"
-              >
-                <span className="text-sm font-medium text-heading">
-                  {client.first_name} {client.last_name}
-                </span>
-              </Link>
-            ))
-          )}
-        </Collapsible>
+        {/* Gone Quiet (Build C): counts per group only, each opening the Gone Quiet page */}
+        {(() => {
+          const total = goneQuietCounts ? GROUPS.reduce((n, g) => n + goneQuietCounts[g.key], 0) : null
+          return (
+            <Collapsible
+              title="Online Classes: Gone Quiet"
+              count={total ?? '?'}
+              tone={total ? 'warning' : 'neutral'}
+            >
+              {!goneQuietCounts ? (
+                <p className="text-sm text-muted">Gone Quiet counts unavailable.</p>
+              ) : (
+                <>
+                  {GROUPS.map(g => (
+                    <Link
+                      key={g.key}
+                      href={`/gone-quiet?group=${g.key}`}
+                      className="flex items-center justify-between py-2 border-b border-card-border last:border-0 hover:bg-grey-subtle -mx-1 px-1 rounded min-h-[44px] md:min-h-0"
+                    >
+                      <span className="text-sm font-medium text-heading">{g.label}</span>
+                      <span className="text-sm text-muted">{goneQuietCounts[g.key]}</span>
+                    </Link>
+                  ))}
+                  <Link href="/gone-quiet?view=dismissed" className="block text-xs text-muted underline mt-3">
+                    Dismissed
+                  </Link>
+                </>
+              )}
+            </Collapsible>
+          )
+        })()}
 
         <Collapsible
           title="Stale Leads"
