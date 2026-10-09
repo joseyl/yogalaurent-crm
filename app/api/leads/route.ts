@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { findPersonByEmail } from '@/lib/findPersonByEmail'
 import { createServerClient } from '@/lib/supabase/server'
 
 function daysSince(dateStr: string): number {
@@ -65,11 +66,13 @@ export async function POST(request: NextRequest) {
   }
 
   // Find or create person
-  const { data: existingPerson } = await supabase
-    .from('people')
-    .select('id')
-    .eq('email', email as string)
-    .maybeSingle()
+  // Main, alt or other email (migration 014), so an existing client is never created twice
+  let existingPerson: { id: string } | null
+  try {
+    existingPerson = await findPersonByEmail(email as string)
+  } catch {
+    return NextResponse.json({ error: 'Could not check the email. Try again.' }, { status: 500 })
+  }
 
   let personId: string
 

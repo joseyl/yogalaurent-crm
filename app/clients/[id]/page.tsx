@@ -3,6 +3,7 @@ import { createServerClient } from '@/lib/supabase/server'
 import ClientDetail from '@/components/ClientDetail'
 import { fetchAll } from '@/lib/fetchAll'
 import type { PassFollowupHistoryRow } from '@/components/PassFollowupHistory'
+import type { OtherEmailRow } from '@/components/OtherEmails'
 
 interface Props {
   params: Promise<{ id: string }>
@@ -18,6 +19,7 @@ export default async function ClientDetailPage({ params }: Props) {
     attendance,
     { data: leads },
     { data: products },
+    { data: otherEmailRows },
   ] = await Promise.all([
     supabase.from('people').select('*').eq('id', id).maybeSingle(),
     supabase
@@ -45,6 +47,11 @@ export default async function ClientDetailPage({ params }: Props) {
       .neq('archived', true)
       .order('category', { ascending: true })
       .order('name', { ascending: true }),
+    supabase
+      .from('person_emails')
+      .select('id, email, source, note, created_at')
+      .eq('person_id', id)
+      .order('created_at', { ascending: true }),
   ])
 
   if (!person) notFound()
@@ -174,6 +181,7 @@ export default async function ClientDetailPage({ params }: Props) {
       leads={leadsData}
       products={productsData}
       passFollowups={passFollowups}
+      otherEmails={(otherEmailRows ?? []) as OtherEmailRow[]}
     />
   )
 }

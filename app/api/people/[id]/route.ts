@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { findPersonByEmail } from '@/lib/findPersonByEmail'
 import { createServerClient } from '@/lib/supabase/server'
 
 const ALLOWED_FIELDS = [
@@ -36,8 +37,33 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     }
   }
 
+  // A main or alt email that belongs to another record is refused (migration 014): that is a
+  // duplicate to merge, not an address to copy. Only a CHANGED address is checked, so the
+  // existing duplicates (an alt email that is another record's main email) can still be edited.
+  const { data: current } = await supabase.from('people').select('email, alt_email').eq('id', id).maybeSingle()
+  const norm = (v: unknown) => (typeof v === 'string' ? v.toLowerCase().replace(/\s/g, '') : '')
+  for (const field of ['email', 'alt_email'] as const) {
+    const value = update[field]
+    if (typeof value !== 'string' || !value.trim()) continue
+    if (current && norm(current[field]) === norm(value)) continue
+    try {
+      const other = await findPersonByEmail(value)
+      if (other && other.id !== id) {
+        return NextResponse.json(
+          { error: `This ${field === 'email' ? 'email' : 'alt email'} is already on another client record.` },
+          { status: 409 },
+        )
+      }
+    } catch {
+      return NextResponse.json({ error: 'Could not check the email. Try again.' }, { status: 500 })
+    }
+  }
+
   const { error } = await supabase.from('people').update(update).eq('id', id)
 
+  if (error?.code === '23505') {
+    return NextResponse.json({ error: 'This email is already on another client record.' }, { status: 409 })
+  }
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }

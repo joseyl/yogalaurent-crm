@@ -1,4 +1,5 @@
 import { supabaseAdmin } from './supabase-admin'
+import { findPersonByEmail } from './findPersonByEmail'
 
 interface PersonData {
   email: string
@@ -8,38 +9,6 @@ interface PersonData {
   /** Where this person came from. Defaults to Momence so existing callers are unchanged. */
   sourceChannel?: string
   country?: string
-}
-
-async function sleep(ms: number) {
-  return new Promise(resolve => setTimeout(resolve, ms))
-}
-
-async function lookupByField(
-  field: 'email' | 'alt_email',
-  value: string,
-): Promise<{ id: string } | null> {
-  const delays = [0, 300, 600]
-  let lastError: { code: string; message: string } | null = null
-
-  for (let attempt = 0; attempt < delays.length; attempt++) {
-    if (delays[attempt] > 0) await sleep(delays[attempt])
-
-    const { data, error } = await supabaseAdmin
-      .from('people')
-      .select('id')
-      .eq(field, value)
-      .limit(1)
-
-    if (error) {
-      lastError = { code: error.code, message: error.message }
-      continue
-    }
-
-    return data && data.length > 0 ? data[0] : null
-  }
-
-  // All retries exhausted; propagate the error as a thrown value
-  throw lastError
 }
 
 async function logFailure(email: string, err: { code: string; message: string } | null) {
@@ -56,28 +25,20 @@ async function logFailure(email: string, err: { code: string; message: string } 
   }
 }
 
+/**
+ * Finds a person by main email, alt_email or other email (Build D, migration 014), or
+ * creates one. Two records sharing an alt_email: the oldest is used, as before.
+ */
 export async function findOrCreatePerson(data: PersonData): Promise<string | null> {
   const email = data.email.toLowerCase().trim()
 
-  // Look up by primary email
-  let byEmail: { id: string } | null = null
   try {
-    byEmail = await lookupByField('email', email)
+    const found = await findPersonByEmail(email)
+    if (found) return found.id
   } catch (err) {
     await logFailure(email, err as { code: string; message: string })
     return null
   }
-  if (byEmail) return byEmail.id
-
-  // Look up by alt_email
-  let byAltEmail: { id: string } | null = null
-  try {
-    byAltEmail = await lookupByField('alt_email', email)
-  } catch (err) {
-    await logFailure(email, err as { code: string; message: string })
-    return null
-  }
-  if (byAltEmail) return byAltEmail.id
 
   // Insert new person
   const { data: newPerson, error: insertError } = await supabaseAdmin
@@ -97,15 +58,14 @@ export async function findOrCreatePerson(data: PersonData): Promise<string | nul
 
   if (!insertError && newPerson) return newPerson.id
 
-  // On duplicate key, re-fetch the existing row
+  // On duplicate key (created meanwhile, or the address is someone's other email), read it back
   if (insertError?.code === '23505') {
-    let existing: { id: string } | null = null
     try {
-      existing = await lookupByField('email', email)
+      const existing = await findPersonByEmail(email)
+      if (existing) return existing.id
     } catch {
       // fall through to failure log
     }
-    if (existing) return existing.id
   }
 
   // Final failure path

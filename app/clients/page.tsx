@@ -16,6 +16,7 @@ interface Client {
   last_name: string | null
   email: string
   alt_email: string | null
+  other_emails?: string[]
   phone: string | null
   country: string | null
   status: string
@@ -209,7 +210,8 @@ export default function ClientsPage() {
     const q = search.toLowerCase()
     if (q) {
       const name = `${c.first_name ?? ''} ${c.last_name ?? ''}`.toLowerCase()
-      if (!name.includes(q) && !(c.email ?? '').toLowerCase().includes(q)) return false
+      const emails = [c.email, c.alt_email, ...(c.other_emails ?? [])].map(e => (e ?? '').toLowerCase())
+      if (!name.includes(q) && !emails.some(e => e.includes(q))) return false
     }
     if (statusFilter !== 'all' && c.status !== statusFilter) return false
     if (assignedFilter !== 'all' && c.assigned_to !== assignedFilter) return false

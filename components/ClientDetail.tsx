@@ -8,6 +8,7 @@ import ClientTabs from '@/components/ClientTabs'
 import PageHeader from '@/components/ui/PageHeader'
 import Card from '@/components/ui/Card'
 import PassFollowupHistory, { type PassFollowupHistoryRow } from '@/components/PassFollowupHistory'
+import OtherEmails, { type OtherEmailRow } from '@/components/OtherEmails'
 
 interface PersonData {
   id: string
@@ -66,6 +67,7 @@ interface Props {
   leads: LeadRecord[]
   products: Product[]
   passFollowups: PassFollowupHistoryRow[]
+  otherEmails: OtherEmailRow[]
 }
 
 const inputStyle: React.CSSProperties = {
@@ -88,7 +90,7 @@ function Field({ label, value }: { label: string; value: string | null | undefin
   )
 }
 
-export default function ClientDetail({ person: initialPerson, purchases, attendance, leads, products, passFollowups }: Props) {
+export default function ClientDetail({ person: initialPerson, purchases, attendance, leads, products, passFollowups, otherEmails }: Props) {
   const [person, setPerson] = useState<PersonData>(initialPerson)
   const [editing, setEditing] = useState(false)
   const [form, setForm] = useState<PersonData>(initialPerson)
@@ -338,6 +340,8 @@ export default function ClientDetail({ person: initialPerson, purchases, attenda
           </Card>
         </>
       )}
+
+      <OtherEmails personId={person.id} initial={otherEmails} />
 
       <PassFollowupHistory rows={passFollowups} />
 

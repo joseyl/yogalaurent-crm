@@ -1,10 +1,12 @@
 import { supabaseAdmin } from '@/lib/supabase-admin'
 import { fetchAll } from '@/lib/fetchAll'
+import { findPersonByEmail } from '@/lib/findPersonByEmail'
 
 /**
  * Finds CRM people for Momence members, and creates new ones when allowed.
  *
- * Match order: Momence member number, then email, then alt_email.
+ * Match order: Momence member number, then email, then alt_email, then other emails
+ * (person_emails, migration 014), so a merged duplicate is not created again.
  * A new person gets status client, source channel "Momence" and their member number.
  * A matched person without a member number gets it saved (never overwritten).
  * Used by the nightly class copy (lib/momenceSync.ts) and the sales import
@@ -23,6 +25,7 @@ export class MomencePeople {
   private byMember = new Map<string, string>()
   private byEmail = new Map<string, string>()
   private byAlt = new Map<string, string>()
+  private byOther = new Map<string, string>()
   private hasMember = new Set<string>()
   private memberToSave = new Map<string, string>() // person id -> member id
   created = 0
@@ -30,7 +33,7 @@ export class MomencePeople {
   static async load(): Promise<MomencePeople> {
     const mp = new MomencePeople()
     const people = await fetchAll<{ id: string; email: string | null; alt_email: string | null; momence_member_id: number | null }>(
-      () => supabaseAdmin.from('people').select('id,email,alt_email,momence_member_id'),
+      () => supabaseAdmin.from('people').select('id,email,alt_email,momence_member_id').order('id'),
     )
     for (const p of people) {
       if (p.momence_member_id != null) {
@@ -38,8 +41,15 @@ export class MomencePeople {
         if (!mp.byMember.has(String(p.momence_member_id))) mp.byMember.set(String(p.momence_member_id), p.id)
       }
       if (p.email) mp.byEmail.set(p.email.toLowerCase().trim(), p.id)
-      if (p.alt_email) mp.byAlt.set(p.alt_email.toLowerCase().trim(), p.id)
+      if (p.alt_email) {
+        const alt = p.alt_email.toLowerCase().trim()
+        if (!mp.byAlt.has(alt)) mp.byAlt.set(alt, p.id)
+      }
     }
+    const others = await fetchAll<{ person_id: string; email: string }>(
+      () => supabaseAdmin.from('person_emails').select('person_id,email').order('id'),
+    )
+    for (const o of others) mp.byOther.set(o.email, o.person_id)
     return mp
   }
 
@@ -49,7 +59,7 @@ export class MomencePeople {
     const email = (ref.email ?? '').toLowerCase().trim()
     let id: string | null = null
     if (member) id = this.byMember.get(member) ?? null
-    if (!id && email) id = this.byEmail.get(email) ?? this.byAlt.get(email) ?? null
+    if (!id && email) id = this.byEmail.get(email) ?? this.byAlt.get(email) ?? this.byOther.get(email) ?? null
     if (id && member && !this.hasMember.has(id) && !this.memberToSave.has(id)) {
       this.memberToSave.set(id, member)
       this.byMember.set(member, id)
@@ -94,8 +104,7 @@ export class MomencePeople {
       if (member != null) this.hasMember.add(id)
     } else if (error?.code === '23505') {
       // Created meanwhile (for example by the Zapier route): read it back
-      const { data: again } = await supabaseAdmin.from('people').select('id').eq('email', email).limit(1)
-      id = (again?.[0]?.id as string | undefined) ?? null
+      id = (await findPersonByEmail(email))?.id ?? null
     } else {
       throw new Error(`Could not create a person from Momence: ${error?.message ?? 'unknown error'}`)
     }

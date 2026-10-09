@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { findOnePersonId } from '@/lib/findPersonByEmail'
 import { validateWebhookSecret } from '@/lib/webhook-auth'
 import { findOrCreatePerson } from '@/lib/find-or-create-person'
 import { supabaseAdmin } from '@/lib/supabase-admin'
@@ -43,15 +44,9 @@ function amountOrNull(v: unknown): number | null {
   return Number.isFinite(n) ? Math.round(n * 100) / 100 : null
 }
 
-/** Finds a person by email or alt_email. Never creates one. */
+/** Finds exactly one person by main, alt or other email (migration 014). Never creates one. */
 async function findPersonId(email: string): Promise<string | null> {
-  for (const field of ['email', 'alt_email'] as const) {
-    const { data, error } = await supabaseAdmin.from('people').select('id').eq(field, email).limit(2)
-    if (error) throw error
-    if (data && data.length === 1) return data[0].id as string
-    if (data && data.length > 1) return null
-  }
-  return null
+  return findOnePersonId(email)
 }
 
 type CustomField = { key?: unknown; label?: unknown; value?: unknown }

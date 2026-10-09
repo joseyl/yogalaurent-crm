@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { findOnePersonId } from '@/lib/findPersonByEmail'
 import { validateWebhookSecret } from '@/lib/webhook-auth'
 import { supabaseAdmin } from '@/lib/supabase-admin'
 
@@ -42,16 +43,9 @@ async function log(
 
 const text = (v: unknown) => (typeof v === 'string' ? v.trim() : '')
 
-/** Finds a person by email or alt_email. Never creates one. */
+/** Finds exactly one person by main, alt or other email (migration 014). Never creates one. */
 async function findPersonId(email: string): Promise<string | null> {
-  if (!email) return null
-  for (const field of ['email', 'alt_email'] as const) {
-    const { data, error } = await supabaseAdmin.from('people').select('id').eq(field, email).limit(2)
-    if (error) throw error
-    if (data && data.length === 1) return data[0].id as string
-    if (data && data.length > 1) return null
-  }
-  return null
+  return findOnePersonId(email)
 }
 
 export async function POST(request: NextRequest) {

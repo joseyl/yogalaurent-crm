@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { findPersonByEmail } from '@/lib/findPersonByEmail'
 import { createServerClient } from '@/lib/supabase/server'
 import { fetchAll } from '@/lib/fetchAll'
 
@@ -24,6 +25,7 @@ export async function GET() {
     assigned_to: string
     source_channel: string | null
   }[]
+  let otherEmails: { person_id: string; email: string }[]
   let purchases: {
     person_id: string
     amount_gbp: number | string | null
@@ -32,7 +34,7 @@ export async function GET() {
   }[]
 
   try {
-    ;[people, purchases] = await Promise.all([
+    ;[people, purchases, otherEmails] = await Promise.all([
       fetchAll<(typeof people)[number]>(() =>
         supabase
           .from('people')
@@ -47,6 +49,9 @@ export async function GET() {
           .from('purchases')
           .select('person_id, amount_gbp, purchase_date, products(category)')
           .order('id', { ascending: true }),
+      ),
+      fetchAll<{ person_id: string; email: string }>(() =>
+        supabase.from('person_emails').select('person_id, email').order('id', { ascending: true }),
       ),
     ])
   } catch {
@@ -64,8 +69,13 @@ export async function GET() {
     })
   }
 
+  // Other emails (migration 014), so the search finds old addresses too
+  const othersByPerson: Record<string, string[]> = {}
+  for (const o of otherEmails) (othersByPerson[o.person_id] ??= []).push(o.email)
+
   const result = people.map(person => ({
     ...person,
+    other_emails: othersByPerson[person.id] ?? [],
     purchases: byPerson[person.id] ?? [],
   }))
 
@@ -88,14 +98,16 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'first_name, last_name, and email are required.' }, { status: 400 })
   }
 
-  const { data: existing } = await supabase
-    .from('people')
-    .select('id')
-    .eq('email', email as string)
-    .maybeSingle()
-
-  if (existing) {
-    return NextResponse.json({ error: 'A person with this email already exists.' }, { status: 409 })
+  // Main, alt or other email of anyone (migration 014): never create a second record
+  try {
+    if (await findPersonByEmail(email as string)) {
+      return NextResponse.json({ error: 'A person with this email already exists.' }, { status: 409 })
+    }
+    if (alt_email && (await findPersonByEmail(alt_email as string))) {
+      return NextResponse.json({ error: 'The alt email already belongs to a client.' }, { status: 409 })
+    }
+  } catch {
+    return NextResponse.json({ error: 'Could not check the email. Try again.' }, { status: 500 })
   }
 
   const { data: newPerson, error } = await supabase
