@@ -110,7 +110,6 @@ export default function ProductsPage() {
 
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editForm, setEditForm] = useState({ name: '', family: '', category: '', entity: '' })
-  const [interested, setInterested] = useState<Record<string, number>>({})
   const [editSaving, setEditSaving] = useState(false)
   const [editError, setEditError] = useState<string | null>(null)
 
@@ -127,18 +126,6 @@ export default function ProductsPage() {
       .catch(() => {
         if (!cancelled) { setFetchError('Failed to load products.'); setLoading(false) }
       })
-    return () => { cancelled = true }
-  }, [])
-
-  // "Interested: N" per product (moved here from the Reports page)
-  useEffect(() => {
-    let cancelled = false
-    fetch('/api/interests/summary')
-      .then(r => (r.ok ? r.json() : []))
-      .then((rows: { product_id: string; count: number }[]) => {
-        if (!cancelled) setInterested(Object.fromEntries(rows.map(r => [r.product_id, r.count])))
-      })
-      .catch(() => {})
     return () => { cancelled = true }
   }, [])
 
@@ -319,9 +306,6 @@ export default function ProductsPage() {
       <tr key={p.id} className="border-b border-card-border hover:bg-grey-subtle">
         <td className="text-sm font-medium text-heading">
           <Link href={`/products/${p.id}`} className="hover:underline">{linkLabel ?? p.name}</Link>
-          {(interested[p.id] ?? 0) > 0 && (
-            <span className="ml-2 text-xs font-normal text-muted whitespace-nowrap">Interested: {interested[p.id]}</span>
-          )}
         </td>
         <td>
           <span style={{ background: 'var(--color-grey-subtle)', color: '#374151', padding: '2px 6px', fontSize: '11px', fontWeight: 500, borderRadius: '4px' }}>{entityAbbr(p.entity)}</span>

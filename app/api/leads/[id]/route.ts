@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase/server'
 
-const ALLOWED_FIELDS = ['status', 'assigned_to', 'notes', 'last_followup_date'] as const
+const ALLOWED_FIELDS = ['status', 'assigned_to', 'notes', 'last_followup_date', 'product_id'] as const
 type AllowedField = typeof ALLOWED_FIELDS[number]
 
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -24,6 +24,17 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
   if (Object.keys(update).length === 0) {
     return NextResponse.json({ error: 'No valid fields to update.' }, { status: 400 })
+  }
+
+  if ('product_id' in update && update.product_id !== null) {
+    const { data: product } = await supabase
+      .from('products')
+      .select('id')
+      .eq('id', update.product_id)
+      .maybeSingle()
+    if (!product) {
+      return NextResponse.json({ error: 'Unknown product' }, { status: 400 })
+    }
   }
 
   const { error } = await supabase.from('leads').update(update).eq('id', id)

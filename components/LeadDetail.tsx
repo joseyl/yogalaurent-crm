@@ -25,11 +25,20 @@ interface LeadData {
   product_name: string | null
 }
 
+interface Product {
+  id: string
+  name: string
+  category: string
+}
+
 interface Props {
   lead: LeadData
+  products: Product[]
 }
 
 type SaveState = 'idle' | 'saving' | 'saved' | 'error'
+
+const CATEGORY_ORDER = ['training', 'retreat', 'workshop', 'private', 'classes', 'other'] as const
 
 function daysSince(dateStr: string): number {
   const [y, m, d] = dateStr.split('-').map(Number)
@@ -61,24 +70,33 @@ function SaveMsg({ state }: { state: SaveState }) {
   return null
 }
 
-export default function LeadDetail({ lead: initialLead }: Props) {
+export default function LeadDetail({ lead: initialLead, products }: Props) {
   const router = useRouter()
   const [lead, setLead] = useState(initialLead)
   const [notes, setNotes] = useState(initialLead.notes ?? '')
 
   const [statusState, setStatusState] = useState<SaveState>('idle')
   const [assignedState, setAssignedState] = useState<SaveState>('idle')
+  const [productState, setProductState] = useState<SaveState>('idle')
   const [notesState, setNotesState] = useState<SaveState>('idle')
   const [converting, setConverting] = useState(false)
 
   const statusTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const assignedTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const productTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const notesTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const referenceDate = (lead.last_followup_date ?? lead.date_added) as string
   const days = daysSince(referenceDate)
 
-  async function patch(payload: Record<string, string>) {
+  // Group products by category in the required order
+  const groupedProducts = CATEGORY_ORDER.reduce<Record<string, Product[]>>((acc, cat) => {
+    const items = products.filter(p => p.category === cat).sort((a, b) => a.name.localeCompare(b.name))
+    if (items.length > 0) acc[cat] = items
+    return acc
+  }, {})
+
+  async function patch(payload: Record<string, string | null>) {
     const res = await fetch(`/api/leads/${lead.id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
@@ -114,6 +132,19 @@ export default function LeadDetail({ lead: initialLead }: Props) {
       flash(setAssignedState, assignedTimer, 'saved')
     } catch {
       flash(setAssignedState, assignedTimer, 'error')
+    }
+  }
+
+  async function handleProductChange(value: string) {
+    const product_id = value || null
+    const product_name = product_id ? (products.find(p => p.id === product_id)?.name ?? null) : null
+    setProductState('saving')
+    try {
+      await patch({ product_id })
+      setLead(prev => ({ ...prev, product_id, product_name }))
+      flash(setProductState, productTimer, 'saved')
+    } catch {
+      flash(setProductState, productTimer, 'error')
     }
   }
 
@@ -180,7 +211,6 @@ export default function LeadDetail({ lead: initialLead }: Props) {
             <Field label="Country" value={lead.country} />
             <Field label="Source Channel" value={lead.source_channel} />
             <Field label="Assigned To" value={lead.assigned_to} />
-            <Field label="Product of Interest" value={lead.product_name} />
             <Field label="Date Added" value={lead.date_added} />
             <Field
               label="Days Since Follow-up"
@@ -236,6 +266,30 @@ export default function LeadDetail({ lead: initialLead }: Props) {
                   <option value="Laurent">Laurent</option>
                 </select>
                 <SaveMsg state={assignedState} />
+              </div>
+            </div>
+
+            {/* Product of Interest */}
+            <div>
+              <p className="uppercase tracking-wide text-xs mb-2 text-muted">Product of Interest</p>
+              <div className="flex items-center gap-2">
+                <select
+                  value={lead.product_id ?? ''}
+                  onChange={e => handleProductChange(e.target.value)}
+                  style={selectStyle}
+                  onFocus={e => { e.currentTarget.style.borderColor = 'var(--accent)' }}
+                  onBlur={e => { e.currentTarget.style.borderColor = '#E4E7EC' }}
+                >
+                  <option value="">None</option>
+                  {Object.entries(groupedProducts).map(([cat, items]) => (
+                    <optgroup key={cat} label={cat.charAt(0).toUpperCase() + cat.slice(1)}>
+                      {items.map(p => (
+                        <option key={p.id} value={p.id}>{p.name}</option>
+                      ))}
+                    </optgroup>
+                  ))}
+                </select>
+                <SaveMsg state={productState} />
               </div>
             </div>
 

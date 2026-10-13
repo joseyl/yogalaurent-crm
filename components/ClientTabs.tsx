@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, Fragment } from 'react'
+import { useState, Fragment } from 'react'
 import { Edit2, Trash2, RefreshCcw, Plus, ChevronDown, ChevronRight } from 'lucide-react'
 import StatusBadge from '@/components/StatusBadge'
 import Card from '@/components/ui/Card'
@@ -178,17 +178,6 @@ interface LeadRecord {
   product_name: string | null
 }
 
-interface Interest {
-  id: string
-  product_id: string
-  source: string | null
-  added_date: string
-  added_by: string
-  notes: string | null
-  product_name: string
-  category: string
-}
-
 interface PurchaseFormState {
   product_id: string
   amount_gbp: string
@@ -223,7 +212,7 @@ function todayStr(): string {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
 }
 
-const TABS = ['Purchases', 'Attendance', 'Lead History', 'Interests'] as const
+const TABS = ['Purchases', 'Attendance', 'Lead History'] as const
 type Tab = typeof TABS[number]
 
 const CATEGORY_ORDER = ['training', 'retreat', 'workshop', 'private', 'classes', 'other'] as const
@@ -343,21 +332,6 @@ export default function ClientTabs({ personId, purchases, attendance, leads, pro
   // Record payment form (one order at a time) and payment being deleted
   const [recordingId, setRecordingId] = useState<string | null>(null)
   const [deletingPaymentId, setDeletingPaymentId] = useState<string | null>(null)
-
-  // Interests state — null means not yet fetched
-  const [interests, setInterests] = useState<Interest[] | null>(null)
-  const [showAddInterestForm, setShowAddInterestForm] = useState(false)
-  const [addInterestForm, setAddInterestForm] = useState({ product_id: '', source: '', notes: '' })
-  const [addInterestSaving, setAddInterestSaving] = useState(false)
-  const [addInterestError, setAddInterestError] = useState<string | null>(null)
-
-  useEffect(() => {
-    if (activeTab !== 'Interests') return
-    fetch(`/api/interests/by-person/${personId}`)
-      .then(r => r.json() as Promise<Interest[]>)
-      .then(d => setInterests(d))
-      .catch(() => setInterests([]))
-  }, [activeTab, personId])
 
   // Product dropdown grouped in the required category order
   const groupedProducts = CATEGORY_ORDER.reduce<Record<string, Product[]>>((acc, cat) => {
@@ -647,59 +621,6 @@ export default function ClientTabs({ personId, purchases, attendance, leads, pro
       window.alert('Network error. Nothing was deleted.')
     } finally {
       setDeletingPaymentId(null)
-    }
-  }
-
-  // ── Add interest ──────────────────────────────────────────────────────────
-
-  function openAddInterestForm() {
-    setShowAddInterestForm(true)
-    setAddInterestForm({ product_id: '', source: '', notes: '' })
-    setAddInterestError(null)
-  }
-
-  async function handleAddInterest() {
-    if (!addInterestForm.product_id) { setAddInterestError('Please select a product.'); return }
-    setAddInterestSaving(true)
-    setAddInterestError(null)
-    try {
-      const res = await fetch('/api/interests', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          person_id: personId,
-          product_id: addInterestForm.product_id,
-          source: addInterestForm.source || null,
-          notes: addInterestForm.notes || null,
-        }),
-      })
-      const data = await res.json() as { error?: string }
-      if (res.status === 409) {
-        setAddInterestError('This person is already tagged as interested in that product.')
-        setAddInterestSaving(false)
-        return
-      }
-      if (!res.ok) { setAddInterestError(data.error ?? 'Failed to add.'); setAddInterestSaving(false); return }
-      const refreshRes = await fetch(`/api/interests/by-person/${personId}`)
-      const refreshed = await refreshRes.json() as Interest[]
-      setInterests(refreshed as Interest[])
-      setShowAddInterestForm(false)
-    } catch {
-      setAddInterestError('Network error.')
-    } finally {
-      setAddInterestSaving(false)
-    }
-  }
-
-  // ── Remove interest ───────────────────────────────────────────────────────
-
-  async function handleRemoveInterest(id: string) {
-    try {
-      const res = await fetch(`/api/interests?id=${id}`, { method: 'DELETE' })
-      if (!res.ok) return
-      setInterests(prev => prev ? prev.filter(i => i.id !== id) : prev)
-    } catch {
-      // silent
     }
   }
 
@@ -1186,101 +1107,6 @@ export default function ClientTabs({ personId, purchases, attendance, leads, pro
                   ))}
                 </div>
               </>
-            )}
-          </Card>
-        )}
-
-        {/* ── INTERESTS TAB ──────────────────────────────────────────────── */}
-        {activeTab === 'Interests' && (
-          <Card
-            title="Interests"
-            action={
-              <button onClick={openAddInterestForm} className="btn-primary">
-                Add interest
-              </button>
-            }
-          >
-
-            {/* Add interest form */}
-            {showAddInterestForm && (
-              <div className="card p-4 mb-5" style={{ background: 'var(--color-accent-tint)' }}>
-                <p className="font-medium text-sm mb-3 text-heading">New Interest</p>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
-                  <div>
-                    <label className="block text-xs text-muted mb-1">Product *</label>
-                    <ProductSelect
-                      value={addInterestForm.product_id}
-                      onChange={v => setAddInterestForm(f => ({ ...f, product_id: v }))}
-                      grouped={groupedProducts}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs text-muted mb-1">Source</label>
-                    <input
-                      type="text"
-                      placeholder="How did this come up? e.g. completed 60hr, asked at retreat"
-                      value={addInterestForm.source}
-                      onChange={e => setAddInterestForm(f => ({ ...f, source: e.target.value }))}
-                      style={formInputStyle}
-                    />
-                  </div>
-                  <div className="md:col-span-2">
-                    <label className="block text-xs text-muted mb-1">Notes</label>
-                    <textarea
-                      value={addInterestForm.notes}
-                      onChange={e => setAddInterestForm(f => ({ ...f, notes: e.target.value }))}
-                      rows={2}
-                      style={{ ...formInputStyle, resize: 'vertical' }}
-                    />
-                  </div>
-                </div>
-                {addInterestError && <p className="text-red-500 text-xs mb-2">{addInterestError}</p>}
-                <div className="flex gap-2">
-                  <button
-                    onClick={handleAddInterest}
-                    disabled={addInterestSaving}
-                    className="btn-primary"
-                  >
-                    {addInterestSaving ? 'Saving...' : 'Save'}
-                  </button>
-                  <button onClick={() => { setShowAddInterestForm(false); setAddInterestError(null) }} className="btn-secondary">
-                    Cancel
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {interests === null ? (
-              <p className="text-muted text-sm">Loading...</p>
-            ) : interests.length === 0 ? (
-              <p className="text-muted text-sm">No interests recorded yet.</p>
-            ) : (
-              <div className="space-y-2">
-                {interests.map(interest => (
-                  <div
-                    key={interest.id}
-                    className="flex items-center justify-between card p-3"
-                  >
-                    <div className="flex flex-col gap-0.5 flex-1 min-w-0 pr-3">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-medium text-sm text-heading">{interest.product_name}</span>
-                        <StatusBadge status={interest.category} type="person" />
-                      </div>
-                      <div className="flex items-center gap-3 flex-wrap mt-0.5">
-                        {interest.source && <span className="text-xs text-muted">{interest.source}</span>}
-                        <span className="text-xs text-muted">{formatDate(interest.added_date)}</span>
-                        <span className="text-xs text-muted">{interest.added_by}</span>
-                      </div>
-                    </div>
-                    <button
-                      onClick={() => handleRemoveInterest(interest.id)}
-                      className="btn-secondary shrink-0"
-                    >
-                      Remove
-                    </button>
-                  </div>
-                ))}
-              </div>
             )}
           </Card>
         )}
